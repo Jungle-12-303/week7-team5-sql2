@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="720" viewBox="0 0 1260 720" role="img" aria-labelledby="title desc">
+  <title id="title">SELECT 실행 흐름 시퀀스 다이어그램</title>
+  <desc id="desc">main, executor, schema, storage, csv 파일 사이에서 SELECT가 수행되는 흐름.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="100%" stop-color="#ecfeff" />
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f766e" />
+    </marker>
+    <marker id="returnArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
+    </marker>
+    <style>
+      .title { font: 700 30px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 15px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #475569; }
+      .actor { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 16; ry: 16; }
+      .actorText { font: 700 16px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #0f172a; }
+      .actorFile { font: 400 12px Consolas, 'Courier New', monospace; fill: #475569; }
+      .life { stroke: #cbd5e1; stroke-width: 2; stroke-dasharray: 8 8; }
+      .msg { stroke: #0f766e; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .ret { stroke: #64748b; stroke-width: 2.5; stroke-dasharray: 10 7; fill: none; marker-end: url(#returnArrow); }
+      .self { stroke: #0f766e; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .label { font: 600 14px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #1e293b; }
+      .note { fill: #f0fdf4; stroke: #86efac; stroke-width: 1.2; rx: 12; ry: 12; }
+      .noteText { font: 400 13px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect width="1260" height="720" fill="url(#bg)" />
+  <text class="title" x="630" y="48" text-anchor="middle">시퀀스 다이어그램 4. SELECT 실행 흐름</text>
+  <text class="subtitle" x="630" y="78" text-anchor="middle">필요한 컬럼 위치를 계산하고 CSV 를 읽어 결과를 만드는 흐름</text>
+
+  <rect class="actor" x="60" y="110" width="180" height="64" />
+  <text class="actorText" x="150" y="138" text-anchor="middle">Main</text>
+  <text class="actorFile" x="150" y="158" text-anchor="middle">src/app/main.c</text>
+
+  <rect class="actor" x="290" y="110" width="210" height="64" />
+  <text class="actorText" x="395" y="138" text-anchor="middle">Executor</text>
+  <text class="actorFile" x="395" y="158" text-anchor="middle">src/execution/executor.c</text>
+
+  <rect class="actor" x="550" y="110" width="200" height="64" />
+  <text class="actorText" x="650" y="138" text-anchor="middle">Schema</text>
+  <text class="actorFile" x="650" y="158" text-anchor="middle">src/storage/schema.c</text>
+
+  <rect class="actor" x="800" y="110" width="210" height="64" />
+  <text class="actorText" x="905" y="138" text-anchor="middle">Storage</text>
+  <text class="actorFile" x="905" y="158" text-anchor="middle">src/storage/storage.c</text>
+
+  <rect class="actor" x="1070" y="110" width="140" height="64" />
+  <text class="actorText" x="1140" y="138" text-anchor="middle">CSV</text>
+  <text class="actorFile" x="1140" y="158" text-anchor="middle">data/users.csv</text>
+
+  <line class="life" x1="150" y1="174" x2="150" y2="650" />
+  <line class="life" x1="395" y1="174" x2="395" y2="650" />
+  <line class="life" x1="650" y1="174" x2="650" y2="650" />
+  <line class="life" x1="905" y1="174" x2="905" y2="650" />
+  <line class="life" x1="1140" y1="174" x2="1140" y2="650" />
+
+  <path class="msg" d="M 150 230 H 395" />
+  <text class="label" x="272" y="218" text-anchor="middle">SELECT Statement 전달</text>
+
+  <path class="msg" d="M 395 290 H 650" />
+  <text class="label" x="522" y="278" text-anchor="middle">테이블 / 스키마 검증</text>
+
+  <path class="ret" d="M 650 350 H 395" />
+  <text class="label" x="522" y="338" text-anchor="middle">Schema 반환</text>
+
+  <path class="self" d="M 395 400 h 80 v 54 h -80" />
+  <text class="label" x="545" y="432">출력할 컬럼 위치 계산</text>
+
+  <path class="msg" d="M 395 500 H 1140" />
+  <text class="label" x="767" y="488" text-anchor="middle">CSV 읽기</text>
+
+  <path class="ret" d="M 1140 560 H 395" />
+  <text class="label" x="767" y="548" text-anchor="middle">헤더와 데이터 반환</text>
+
+  <path class="msg" d="M 395 620 H 905" />
+  <text class="label" x="650" y="608" text-anchor="middle">각 행 CSV 파싱</text>
+
+  <rect class="note" x="80" y="660" width="1100" height="40" />
+  <text class="noteText" x="630" y="685" text-anchor="middle">storage 는 필드 목록을 돌려주고, executor 가 선택한 컬럼만 묶어 최종 결과를 만듭니다.</text>
+</svg>

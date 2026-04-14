@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760" role="img" aria-labelledby="title desc">
+  <title id="title">전체 실행 흐름 시퀀스 다이어그램</title>
+  <desc id="desc">사용자부터 main, util, lexer, parser, executor까지 이어지는 sqlparser 실행 흐름.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="100%" stop-color="#eef2ff" />
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb" />
+    </marker>
+    <marker id="returnArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
+    </marker>
+    <style>
+      .title { font: 700 30px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 15px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #475569; }
+      .actor { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 16; ry: 16; }
+      .actorText { font: 700 16px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #0f172a; }
+      .actorFile { font: 400 12px Consolas, 'Courier New', monospace; fill: #475569; }
+      .life { stroke: #cbd5e1; stroke-width: 2; stroke-dasharray: 8 8; }
+      .msg { stroke: #2563eb; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .ret { stroke: #64748b; stroke-width: 2.5; stroke-dasharray: 10 7; fill: none; marker-end: url(#returnArrow); }
+      .label { font: 600 14px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #1e293b; }
+      .note { fill: #eff6ff; stroke: #bfdbfe; stroke-width: 1.2; rx: 12; ry: 12; }
+      .noteText { font: 400 13px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="760" fill="url(#bg)" />
+  <text class="title" x="700" y="48" text-anchor="middle">시퀀스 다이어그램 1. 전체 실행 흐름</text>
+  <text class="subtitle" x="700" y="78" text-anchor="middle">SQL 파일을 읽고 토큰화, 파싱, 실행 결과를 사용자에게 돌려주는 흐름</text>
+
+  <rect class="actor" x="50" y="110" width="140" height="64" />
+  <text class="actorText" x="120" y="138" text-anchor="middle">사용자</text>
+  <text class="actorFile" x="120" y="158" text-anchor="middle">CLI</text>
+
+  <rect class="actor" x="250" y="110" width="170" height="64" />
+  <text class="actorText" x="335" y="138" text-anchor="middle">Main</text>
+  <text class="actorFile" x="335" y="158" text-anchor="middle">src/app/main.c</text>
+
+  <rect class="actor" x="480" y="110" width="170" height="64" />
+  <text class="actorText" x="565" y="138" text-anchor="middle">Util</text>
+  <text class="actorFile" x="565" y="158" text-anchor="middle">src/common/util.c</text>
+
+  <rect class="actor" x="710" y="110" width="170" height="64" />
+  <text class="actorText" x="795" y="138" text-anchor="middle">Lexer</text>
+  <text class="actorFile" x="795" y="158" text-anchor="middle">src/sql/lexer.c</text>
+
+  <rect class="actor" x="940" y="110" width="170" height="64" />
+  <text class="actorText" x="1025" y="138" text-anchor="middle">Parser</text>
+  <text class="actorFile" x="1025" y="158" text-anchor="middle">src/sql/parser.c</text>
+
+  <rect class="actor" x="1170" y="110" width="180" height="64" />
+  <text class="actorText" x="1260" y="138" text-anchor="middle">Executor</text>
+  <text class="actorFile" x="1260" y="158" text-anchor="middle">src/execution/executor.c</text>
+
+  <line class="life" x1="120" y1="174" x2="120" y2="690" />
+  <line class="life" x1="335" y1="174" x2="335" y2="690" />
+  <line class="life" x1="565" y1="174" x2="565" y2="690" />
+  <line class="life" x1="795" y1="174" x2="795" y2="690" />
+  <line class="life" x1="1025" y1="174" x2="1025" y2="690" />
+  <line class="life" x1="1260" y1="174" x2="1260" y2="690" />
+
+  <path class="msg" d="M 120 230 H 335" />
+  <text class="label" x="228" y="218" text-anchor="middle">sqlparser.exe query.sql 실행</text>
+
+  <path class="msg" d="M 335 290 H 565" />
+  <text class="label" x="450" y="278" text-anchor="middle">SQL 파일 전체 읽기</text>
+
+  <path class="ret" d="M 565 350 H 335" />
+  <text class="label" x="450" y="338" text-anchor="middle">SQL 문자열 반환</text>
+
+  <path class="msg" d="M 335 410 H 795" />
+  <text class="label" x="565" y="398" text-anchor="middle">SQL 문자열 토큰화</text>
+
+  <path class="ret" d="M 795 470 H 335" />
+  <text class="label" x="565" y="458" text-anchor="middle">Token 배열 반환</text>
+
+  <path class="msg" d="M 335 530 H 1025" />
+  <text class="label" x="680" y="518" text-anchor="middle">Token 배열 파싱</text>
+
+  <path class="ret" d="M 1025 590 H 335" />
+  <text class="label" x="680" y="578" text-anchor="middle">Statement 반환</text>
+
+  <path class="msg" d="M 335 650 H 1260" />
+  <text class="label" x="798" y="638" text-anchor="middle">Statement 실행</text>
+
+  <rect class="note" x="1120" y="690" width="220" height="42" />
+  <text class="noteText" x="1230" y="716" text-anchor="middle">실행 결과는 main 을 거쳐 사용자에게 출력됩니다.</text>
+</svg>

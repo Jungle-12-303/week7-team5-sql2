@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760" role="img" aria-labelledby="title desc">
+  <title id="title">테스트 실행 흐름 시퀀스 다이어그램</title>
+  <desc id="desc">test runner가 lexer, parser, schema, executor, storage를 순서대로 검증하는 흐름.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#faf5ff" />
+      <stop offset="100%" stop-color="#eef2ff" />
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7c3aed" />
+    </marker>
+    <marker id="returnArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
+    </marker>
+    <style>
+      .title { font: 700 30px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 15px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #475569; }
+      .actor { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 16; ry: 16; }
+      .actorText { font: 700 16px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #0f172a; }
+      .actorFile { font: 400 12px Consolas, 'Courier New', monospace; fill: #475569; }
+      .life { stroke: #cbd5e1; stroke-width: 2; stroke-dasharray: 8 8; }
+      .msg { stroke: #7c3aed; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .ret { stroke: #64748b; stroke-width: 2.5; stroke-dasharray: 10 7; fill: none; marker-end: url(#returnArrow); }
+      .label { font: 600 14px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #1e293b; }
+      .note { fill: #ffffff; stroke: #ddd6fe; stroke-width: 1.2; rx: 12; ry: 12; }
+      .noteText { font: 400 13px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="760" fill="url(#bg)" />
+  <text class="title" x="700" y="48" text-anchor="middle">시퀀스 다이어그램 5. 테스트 실행 흐름</text>
+  <text class="subtitle" x="700" y="78" text-anchor="middle">테스트 러너가 핵심 모듈을 순서대로 검증하는 흐름</text>
+
+  <rect class="actor" x="40" y="110" width="180" height="64" />
+  <text class="actorText" x="130" y="138" text-anchor="middle">Tester</text>
+  <text class="actorFile" x="130" y="158" text-anchor="middle">tests/test_runner.c</text>
+
+  <rect class="actor" x="250" y="110" width="170" height="64" />
+  <text class="actorText" x="335" y="138" text-anchor="middle">Lexer</text>
+  <text class="actorFile" x="335" y="158" text-anchor="middle">src/sql/lexer.c</text>
+
+  <rect class="actor" x="450" y="110" width="170" height="64" />
+  <text class="actorText" x="535" y="138" text-anchor="middle">Parser</text>
+  <text class="actorFile" x="535" y="158" text-anchor="middle">src/sql/parser.c</text>
+
+  <rect class="actor" x="650" y="110" width="180" height="64" />
+  <text class="actorText" x="740" y="138" text-anchor="middle">Schema</text>
+  <text class="actorFile" x="740" y="158" text-anchor="middle">src/storage/schema.c</text>
+
+  <rect class="actor" x="860" y="110" width="200" height="64" />
+  <text class="actorText" x="960" y="138" text-anchor="middle">Executor</text>
+  <text class="actorFile" x="960" y="158" text-anchor="middle">src/execution/executor.c</text>
+
+  <rect class="actor" x="1090" y="110" width="200" height="64" />
+  <text class="actorText" x="1190" y="138" text-anchor="middle">Storage</text>
+  <text class="actorFile" x="1190" y="158" text-anchor="middle">src/storage/storage.c</text>
+
+  <line class="life" x1="130" y1="174" x2="130" y2="690" />
+  <line class="life" x1="335" y1="174" x2="335" y2="690" />
+  <line class="life" x1="535" y1="174" x2="535" y2="690" />
+  <line class="life" x1="740" y1="174" x2="740" y2="690" />
+  <line class="life" x1="960" y1="174" x2="960" y2="690" />
+  <line class="life" x1="1190" y1="174" x2="1190" y2="690" />
+
+  <path class="msg" d="M 130 230 H 335" />
+  <text class="label" x="232" y="218" text-anchor="middle">SQL 토큰화 테스트</text>
+
+  <path class="ret" d="M 335 290 H 130" />
+  <text class="label" x="232" y="278" text-anchor="middle">토큰 반환</text>
+
+  <path class="msg" d="M 130 350 H 535" />
+  <text class="label" x="332" y="338" text-anchor="middle">SQL 파싱 테스트</text>
+
+  <path class="ret" d="M 535 410 H 130" />
+  <text class="label" x="332" y="398" text-anchor="middle">Statement 반환</text>
+
+  <path class="msg" d="M 130 470 H 740" />
+  <text class="label" x="435" y="458" text-anchor="middle">스키마 로딩 테스트</text>
+
+  <path class="ret" d="M 740 530 H 130" />
+  <text class="label" x="435" y="518" text-anchor="middle">Schema 반환</text>
+
+  <path class="msg" d="M 130 590 H 960" />
+  <text class="label" x="545" y="578" text-anchor="middle">INSERT / SELECT 실행 테스트</text>
+
+  <path class="msg" d="M 130 650 H 1190" />
+  <text class="label" x="660" y="638" text-anchor="middle">CSV escape 테스트</text>
+
+  <rect class="note" x="300" y="690" width="800" height="40" />
+  <text class="noteText" x="700" y="715" text-anchor="middle">tests/test_runner.c 는 파싱, 스키마, 실행, 저장 규칙을 모두 한 번에 검증합니다.</text>
+</svg>

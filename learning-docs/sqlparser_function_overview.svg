@@ -1,0 +1,189 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1620" height="1120" viewBox="0 0 1620 1120" role="img" aria-labelledby="title desc">
+  <title id="title">SqlParser 기능 구조도</title>
+  <desc id="desc">SqlParser 프로젝트를 입력, SQL 해석, 실행, 파일 저장, 테스트 검증으로 나눠 보여주는 기능 구조도.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="100%" stop-color="#eef4ff" />
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569" />
+    </marker>
+    <style>
+      .title { font: 700 32px 'Malgun Gothic', 'Noto Sans KR', 'Segoe UI', sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 16px 'Malgun Gothic', 'Noto Sans KR', 'Segoe UI', sans-serif; fill: #475569; }
+      .lane-title { font: 700 21px 'Malgun Gothic', 'Noto Sans KR', 'Segoe UI', sans-serif; fill: #0f172a; }
+      .lane-note { font: 400 14px 'Malgun Gothic', 'Noto Sans KR', 'Segoe UI', sans-serif; fill: #475569; }
+      .card-title { font: 700 17px 'Malgun Gothic', 'Noto Sans KR', 'Segoe UI', sans-serif; fill: #0f172a; }
+      .card-body { font: 400 13px 'Malgun Gothic', 'Noto Sans KR', 'Segoe UI', sans-serif; fill: #334155; }
+      .small { font: 400 13px 'Malgun Gothic', 'Noto Sans KR', 'Segoe UI', sans-serif; fill: #475569; }
+      .code { font: 400 12px Consolas, 'Courier New', monospace; fill: #334155; }
+      .lane { fill: rgba(255,255,255,0.82); stroke: #d7e3f3; stroke-width: 1.5; rx: 26; ry: 26; }
+      .input { fill: #fff7ed; stroke: #fdba74; stroke-width: 1.5; rx: 16; ry: 16; }
+      .analysis { fill: #fefce8; stroke: #facc15; stroke-width: 1.5; rx: 16; ry: 16; }
+      .exec { fill: #eff6ff; stroke: #93c5fd; stroke-width: 1.5; rx: 16; ry: 16; }
+      .storage { fill: #ecfdf5; stroke: #86efac; stroke-width: 1.5; rx: 16; ry: 16; }
+      .test { fill: #f5f3ff; stroke: #c4b5fd; stroke-width: 1.5; rx: 16; ry: 16; }
+      .arrow { stroke: #64748b; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .hint { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.2; rx: 12; ry: 12; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1620" height="1120" fill="url(#bg)" />
+  <g transform="translate(24 16) scale(1.08)">
+
+  <text class="title" x="750" y="54" text-anchor="middle">SqlParser 기능 구조도</text>
+  <text class="subtitle" x="750" y="84" text-anchor="middle">입력 -> SQL 해석 -> 실행 -> 파일 저장 -> 테스트 검증 흐름으로 읽는 프로젝트 개요</text>
+
+  <rect class="lane" x="40" y="130" width="230" height="830" />
+  <text class="lane-title" x="65" y="170">1. 입력</text>
+  <text class="lane-note" x="65" y="196">
+    <tspan x="65" dy="0">프로그램을 시작하고</tspan>
+    <tspan x="65" dy="18">SQL 파일을 읽습니다.</tspan>
+  </text>
+
+  <rect class="input" x="60" y="240" width="190" height="150" />
+  <text class="card-title" x="78" y="275">CLI 진입점</text>
+  <text class="code" x="78" y="304">src/app/main.c</text>
+  <text class="card-body" x="78" y="332">- 실행 인자 확인</text>
+  <text class="card-body" x="78" y="356">- SQL 파일 경로 받기</text>
+  <text class="card-body" x="78" y="380">- 전체 흐름 연결</text>
+
+  <rect class="input" x="60" y="420" width="190" height="160" />
+  <text class="card-title" x="78" y="455">공통 유틸</text>
+  <text class="code" x="78" y="484">src/common/util.c</text>
+  <text class="card-body" x="78" y="512">- SQL 파일 전체 읽기</text>
+  <text class="card-body" x="78" y="536">- 문자열 복사와 정리</text>
+  <text class="card-body" x="78" y="560">- 경로 생성 유틸</text>
+
+  <rect class="hint" x="60" y="620" width="190" height="190" />
+  <text class="card-title" x="78" y="655">입력 예시</text>
+  <text class="card-body" x="78" y="683">
+    <tspan x="78" dy="0">예를 들어 아래</tspan>
+    <tspan x="78" dy="18">SQL 을 읽습니다.</tspan>
+  </text>
+  <text class="code" x="78" y="728">INSERT INTO users (...);</text>
+  <text class="card-body" x="78" y="752">또는</text>
+  <text class="code" x="78" y="780">SELECT name</text>
+  <text class="code" x="78" y="804">FROM users;</text>
+
+  <rect class="lane" x="290" y="130" width="250" height="830" />
+  <text class="lane-title" x="315" y="170">2. SQL 해석</text>
+  <text class="lane-note" x="315" y="196">
+    <tspan x="315" dy="0">원문 SQL 을 구조화된</tspan>
+    <tspan x="315" dy="18">명령으로 바꿉니다.</tspan>
+  </text>
+
+  <rect class="analysis" x="315" y="240" width="200" height="155" />
+  <text class="card-title" x="333" y="275">Lexer</text>
+  <text class="code" x="333" y="304">src/sql/lexer.c</text>
+  <text class="card-body" x="333" y="332">- SQL 을 토큰으로 분리</text>
+  <text class="card-body" x="333" y="356">- 식별자, 문자열, 숫자</text>
+  <text class="card-body" x="333" y="380">- 쉼표, 괄호, 기호 처리</text>
+
+  <rect class="analysis" x="315" y="430" width="200" height="165" />
+  <text class="card-title" x="333" y="465">Parser</text>
+  <text class="code" x="333" y="494">src/sql/parser.c</text>
+  <text class="card-body" x="333" y="522">- 토큰을 Statement 로 변환</text>
+  <text class="card-body" x="333" y="546">- 현재 지원: INSERT</text>
+  <text class="card-body" x="333" y="570">- 현재 지원: SELECT</text>
+
+  <rect class="analysis" x="315" y="630" width="200" height="160" />
+  <text class="card-title" x="333" y="665">AST 정리</text>
+  <text class="code" x="333" y="694">src/sql/ast.c</text>
+  <text class="card-body" x="333" y="722">- 실행 후 파싱 결과 정리</text>
+  <text class="card-body" x="333" y="746">- 메모리 해제</text>
+
+  <rect class="hint" x="315" y="810" width="200" height="135" />
+  <text class="card-title" x="333" y="835">이 단계 결과</text>
+  <text class="card-body" x="333" y="863">구조화된 Statement 생성</text>
+  <text class="card-body" x="333" y="887">다음 실행 단계로 이동</text>
+
+  <rect class="lane" x="560" y="130" width="320" height="830" />
+  <text class="lane-title" x="585" y="170">3. 실행</text>
+  <text class="lane-note" x="585" y="196">파싱된 SQL 을 실제 동작으로 연결합니다.</text>
+
+  <rect class="exec" x="585" y="240" width="270" height="150" />
+  <text class="card-title" x="605" y="275">실행기 중심</text>
+  <text class="code" x="605" y="304">src/execution/executor.c</text>
+  <text class="card-body" x="605" y="332">- Statement 종류에 따라 분기</text>
+  <text class="card-body" x="605" y="356">- INSERT 와 SELECT 처리</text>
+  <text class="card-body" x="605" y="380">- 결과 문자열 생성</text>
+
+  <rect class="exec" x="585" y="425" width="270" height="175" />
+  <text class="card-title" x="605" y="460">INSERT 실행</text>
+  <text class="card-body" x="605" y="488">- 스키마 검증</text>
+  <text class="card-body" x="605" y="512">- 컬럼 순서에 맞게 값 정렬</text>
+  <text class="card-body" x="605" y="536">- 빠진 값은 빈 문자열로 채움</text>
+  <text class="card-body" x="605" y="560">- CSV 끝에 새 행 추가</text>
+
+  <rect class="exec" x="585" y="635" width="270" height="190" />
+  <text class="card-title" x="605" y="670">SELECT 실행</text>
+  <text class="card-body" x="605" y="698">- 스키마 검증</text>
+  <text class="card-body" x="605" y="722">- 요청한 컬럼 위치 계산</text>
+  <text class="card-body" x="605" y="746">- CSV 각 행 읽기</text>
+  <text class="card-body" x="605" y="770">- 행을 필드로 파싱</text>
+  <text class="card-body" x="605" y="794">- 선택한 컬럼만 출력</text>
+
+  <rect class="lane" x="900" y="130" width="260" height="830" />
+  <text class="lane-title" x="925" y="170">4. 파일 저장</text>
+  <text class="lane-note" x="925" y="196">
+    <tspan x="925" dy="0">테이블 규칙과</tspan>
+    <tspan x="925" dy="18">CSV 형식을 관리합니다.</tspan>
+  </text>
+
+  <rect class="storage" x="925" y="240" width="210" height="155" />
+  <text class="card-title" x="943" y="275">스키마 규칙</text>
+  <text class="code" x="943" y="304">src/storage/schema.c</text>
+  <text class="card-body" x="943" y="332">- 테이블 존재 여부 검사</text>
+  <text class="card-body" x="943" y="356">- meta 와 csv 동시 확인</text>
+  <text class="card-body" x="943" y="380">- 헤더 순서 일치 검증</text>
+
+  <rect class="storage" x="925" y="430" width="210" height="170" />
+  <text class="card-title" x="943" y="465">CSV 저장 처리</text>
+  <text class="code" x="943" y="494">src/storage/storage.c</text>
+  <text class="card-body" x="943" y="522">- CSV 한 줄 파싱</text>
+  <text class="card-body" x="943" y="546">- 큰따옴표와 쉼표 escape</text>
+  <text class="card-body" x="943" y="570">- 안전하게 행 추가</text>
+
+  <rect class="hint" x="925" y="640" width="210" height="190" />
+  <text class="card-title" x="943" y="675">파일 예시</text>
+  <text class="card-body" x="943" y="703">meta</text>
+  <text class="code" x="943" y="731">table=users</text>
+  <text class="code" x="943" y="755">columns=id,name,age</text>
+  <text class="card-body" x="943" y="787">csv</text>
+  <text class="code" x="943" y="815">id,name,age</text>
+
+  <rect class="lane" x="1180" y="130" width="280" height="830" />
+  <text class="lane-title" x="1205" y="170">5. 테스트 검증</text>
+  <text class="lane-note" x="1205" y="196">
+    <tspan x="1205" dy="0">전체 흐름이 올바른지</tspan>
+    <tspan x="1205" dy="18">자동으로 확인합니다.</tspan>
+  </text>
+
+  <rect class="test" x="1205" y="240" width="230" height="205" />
+  <text class="card-title" x="1223" y="275">테스트 러너</text>
+  <text class="code" x="1223" y="304">tests/test_runner.c</text>
+  <text class="card-body" x="1223" y="332">- lexer 테스트</text>
+  <text class="card-body" x="1223" y="356">- parser 테스트</text>
+  <text class="card-body" x="1223" y="380">- schema 로딩 테스트</text>
+  <text class="card-body" x="1223" y="404">- INSERT / SELECT 테스트</text>
+  <text class="card-body" x="1223" y="428">- CSV escape 테스트</text>
+
+  <rect class="test" x="1205" y="485" width="230" height="125" />
+  <text class="card-title" x="1223" y="520">빌드 산출물</text>
+  <text class="code" x="1223" y="549">build/bin</text>
+  <text class="card-body" x="1223" y="577">프로그램 실행 파일과</text>
+  <text class="card-body" x="1223" y="601">테스트 실행 파일 생성</text>
+
+  <path class="arrow" d="M 250 320 C 272 320, 286 320, 315 320" />
+  <path class="arrow" d="M 515 510 C 538 510, 552 510, 585 510" />
+  <path class="arrow" d="M 855 510 C 880 510, 895 510, 925 510" />
+  <path class="arrow" d="M 1135 510 C 1158 510, 1172 510, 1205 510" />
+
+  <path class="arrow" d="M 720 390 C 720 404, 720 411, 720 425" />
+  <path class="arrow" d="M 720 600 C 720 614, 720 621, 720 635" />
+  <path class="arrow" d="M 1030 395 C 1030 409, 1030 416, 1030 430" />
+
+  </g>
+</svg>

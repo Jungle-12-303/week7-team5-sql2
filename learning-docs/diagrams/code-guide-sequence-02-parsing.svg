@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="640" viewBox="0 0 1180 640" role="img" aria-labelledby="title desc">
+  <title id="title">SQL 파싱 전반 시퀀스 다이어그램</title>
+  <desc id="desc">main, lexer, parser, ast 사이에서 SQL 문자열이 토큰과 statement로 바뀌는 흐름.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fffbeb" />
+      <stop offset="100%" stop-color="#eff6ff" />
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f766e" />
+    </marker>
+    <marker id="returnArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
+    </marker>
+    <style>
+      .title { font: 700 30px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 15px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #475569; }
+      .actor { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 16; ry: 16; }
+      .actorText { font: 700 16px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #0f172a; }
+      .actorFile { font: 400 12px Consolas, 'Courier New', monospace; fill: #475569; }
+      .life { stroke: #cbd5e1; stroke-width: 2; stroke-dasharray: 8 8; }
+      .msg { stroke: #0f766e; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .ret { stroke: #64748b; stroke-width: 2.5; stroke-dasharray: 10 7; fill: none; marker-end: url(#returnArrow); }
+      .label { font: 600 14px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #1e293b; }
+      .note { fill: #f0fdf4; stroke: #86efac; stroke-width: 1.2; rx: 12; ry: 12; }
+      .noteText { font: 400 13px 'Malgun Gothic', 'Noto Sans KR', sans-serif; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect width="1180" height="640" fill="url(#bg)" />
+  <text class="title" x="590" y="48" text-anchor="middle">시퀀스 다이어그램 2. SQL 파싱 전반</text>
+  <text class="subtitle" x="590" y="78" text-anchor="middle">문자열이 token 으로, token 이 statement 로 바뀌는 핵심 구간</text>
+
+  <rect class="actor" x="110" y="110" width="180" height="64" />
+  <text class="actorText" x="200" y="138" text-anchor="middle">Main</text>
+  <text class="actorFile" x="200" y="158" text-anchor="middle">src/app/main.c</text>
+
+  <rect class="actor" x="360" y="110" width="180" height="64" />
+  <text class="actorText" x="450" y="138" text-anchor="middle">Lexer</text>
+  <text class="actorFile" x="450" y="158" text-anchor="middle">src/sql/lexer.c</text>
+
+  <rect class="actor" x="610" y="110" width="180" height="64" />
+  <text class="actorText" x="700" y="138" text-anchor="middle">Parser</text>
+  <text class="actorFile" x="700" y="158" text-anchor="middle">src/sql/parser.c</text>
+
+  <rect class="actor" x="860" y="110" width="180" height="64" />
+  <text class="actorText" x="950" y="138" text-anchor="middle">AST</text>
+  <text class="actorFile" x="950" y="158" text-anchor="middle">src/sql/ast.c</text>
+
+  <line class="life" x1="200" y1="174" x2="200" y2="580" />
+  <line class="life" x1="450" y1="174" x2="450" y2="580" />
+  <line class="life" x1="700" y1="174" x2="700" y2="580" />
+  <line class="life" x1="950" y1="174" x2="950" y2="580" />
+
+  <path class="msg" d="M 200 240 H 450" />
+  <text class="label" x="325" y="228" text-anchor="middle">SQL 문자열 전달</text>
+
+  <path class="ret" d="M 450 310 H 200" />
+  <text class="label" x="325" y="298" text-anchor="middle">Token 배열 반환</text>
+
+  <path class="msg" d="M 200 380 H 700" />
+  <text class="label" x="450" y="368" text-anchor="middle">Token 배열 전달</text>
+
+  <path class="msg" d="M 700 450 H 950" />
+  <text class="label" x="825" y="438" text-anchor="middle">INSERT / SELECT 구조 생성</text>
+
+  <path class="ret" d="M 950 520 H 700" />
+  <text class="label" x="825" y="508" text-anchor="middle">Statement 저장</text>
+
+  <rect class="note" x="350" y="548" width="500" height="52" />
+  <text class="noteText" x="600" y="579" text-anchor="middle">parser 는 lexer 결과를 읽고, ast 는 최종 구조체 메모리를 맡습니다.</text>
+</svg>
