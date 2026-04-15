@@ -130,15 +130,18 @@ make test
 대상 함수:
 - `test_index_rebuild_after_reset`
 - `test_index_rebuild_after_invalidate`
+- `test_insert_failure_recovers_via_rebuild`
 
 검증 내용:
 - 한 번 로드한 인덱스를 메모리에서 초기화한 뒤에도 다시 재구성할 수 있다.
 - 재구성 후 같은 `id` 조회 결과를 얻는다.
 - 인덱스를 강제로 무효화한 뒤에도 다음 `WHERE id` 조회에서 다시 재구성할 수 있다.
+- CSV 저장 후 인덱스 등록 실패가 발생해도 다음 인덱스 조회에서 CSV 기준 재구성으로 복구할 수 있다.
 
 연관 요구사항:
 - 인덱스 lazy load
 - CSV 기준 인덱스 재구성
+- 인덱스 등록 실패 후 복구 정책
 
 ### 3.8 오류 처리 테스트
 
@@ -191,19 +194,16 @@ make test
 
 대상 함수:
 - `test_benchmark_main_resets_dataset`
-- `test_insert_failure_recovers_via_rebuild`
 
 검증 내용:
 - 벤치마크 실행 전 남아 있던 기존 CSV 데이터를 헤더 기준으로 초기화한다.
 - 같은 입력 파라미터로 두 번 실행하면 같은 데이터셋을 다시 생성한다.
 - 벤치마크 실행이 별도 schema/data 작업 디렉터리에서 정상 동작한다.
-- CSV 저장 후 인덱스 등록 실패를 강제로 유도해도 다음 인덱스 조회에서 CSV 기준 재구성으로 복구된다.
 
 연관 요구사항:
 - 재현 가능한 대량 데이터 생성 경로
 - 벤치마크 전용 실행 경로
 - 인덱스/선형 조회 성능 비교의 전제 데이터셋 보장
-- 인덱스 등록 실패 후 복구 정책
 
 ## 4. 현재 미포함 또는 향후 보강 후보
 

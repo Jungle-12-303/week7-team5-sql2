@@ -278,7 +278,7 @@ benchmark -> execution / storage / index
 - `src/storage/storage.c`
   append 후 오프셋 반환, 오프셋 기반 행 조회, CSV 전체 순회 함수 추가
 - `src/storage/schema.c`
-  `id` 컬럼 존재 검증 강화
+  스키마 로딩, CSV 헤더 검증, `id` 위치 조회 보조
 
 ## 11. 성능 테스트 구조
 
@@ -298,7 +298,7 @@ benchmark -> execution / storage / index
 - 같은 입력 파라미터로 기존 벤치마크 CSV를 헤더 기준으로 초기화한 뒤 같은 데이터셋을 다시 생성
 - 같은 프로세스에서
   `WHERE id = ?`
-  `WHERE name = ?`
+  `WHERE other_column = ?`
   등의 질의를 반복 측정
 
 ## 12. 테스트 전략
