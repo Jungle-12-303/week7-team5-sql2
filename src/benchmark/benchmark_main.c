@@ -152,8 +152,10 @@ int benchmark_main(int argc, char *argv[]) {
     char id_text[32];
     const char *other_column = NULL;
     char *other_value = NULL;
+    double insert_time;
     double indexed_time;
     double linear_time;
+    clock_t insert_started;
 
     if (argc != 5 && argc != 6) {
         fprintf(stderr, "Usage: %s <schema_dir> <data_dir> <table_name> <row_count> [query_repeat]\n", argv[0]);
@@ -198,6 +200,7 @@ int benchmark_main(int argc, char *argv[]) {
     }
 
     table_index_registry_reset();
+    insert_started = clock();
     for (index = 0; index < row_count; index++) {
         ExecResult result;
         if (!build_insert_statement(&schema_result.schema, index + 1, &statement, schema_result.message, sizeof(schema_result.message))) {
@@ -214,6 +217,7 @@ int benchmark_main(int argc, char *argv[]) {
             return 1;
         }
     }
+    insert_time = (double)(clock() - insert_started) / (double)CLOCKS_PER_SEC;
 
     target_id = row_count / 2;
     if (target_id < 1) {
@@ -245,6 +249,7 @@ int benchmark_main(int argc, char *argv[]) {
     }
 
     printf("Inserted rows: %d\n", row_count);
+    printf("Insert time: %.6f sec\n", insert_time);
     printf("Query repeats: %d\n", query_repeat);
     printf("Indexed query avg time: %.6f sec\n", indexed_time);
     printf("Linear query avg time: %.6f sec\n", linear_time);

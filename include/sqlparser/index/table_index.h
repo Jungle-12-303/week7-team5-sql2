@@ -18,5 +18,6 @@ int table_index_is_loaded(const char *table_name);
 int table_index_get_next_id(const Schema *schema, const char *data_dir, int *next_id, char *message, size_t message_size);
 int table_index_register_row(const Schema *schema, const char *data_dir, int id, long row_offset, char *message, size_t message_size);
 TableIndexLookupResult table_index_find_row(const Schema *schema, const char *data_dir, int id);
+void table_index_force_next_register_failure(void);
 
 #endif

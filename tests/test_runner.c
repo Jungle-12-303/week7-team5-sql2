@@ -137,6 +137,27 @@ static void test_bptree_insert_and_search(void) {
     bptree_free(&tree);
 }
 
+static void test_bptree_split_preserves_searchability(void) {
+    BPlusTree tree;
+    char error[256];
+    long value;
+    int index;
+
+    bptree_init(&tree);
+    for (index = 1; index <= 32; index++) {
+        expect_true(bptree_insert(&tree, index, (long)(index * 10), error, sizeof(error)), "B+ tree inserts enough keys to trigger splits");
+    }
+
+    for (index = 1; index <= 32; index++) {
+        expect_true(bptree_search(&tree, index, &value), "B+ tree keeps keys searchable after splits");
+        if (bptree_search(&tree, index, &value)) {
+            expect_true(value == (long)(index * 10), "B+ tree preserves values after splits");
+        }
+    }
+
+    bptree_free(&tree);
+}
+
 static void test_parser_where(void) {
     TokenArray tokens = {0};
     ParseResult result;
@@ -654,6 +675,95 @@ static void test_csv_escape(void) {
     string_list_free(&row);
 }
 
+static void test_storage_row_offset_roundtrip(void) {
+    StringList row = {0};
+    char root[128];
+    char data_dir[160];
+    char schema_dir[160];
+    char data_path[192];
+    StorageResult append_result;
+    StorageReadResult read_result;
+
+    reset_runtime_state();
+    expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create offset roundtrip test directories");
+    build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
+    expect_true(write_text_file(data_path, "id,name,age\n"), "write offset roundtrip header");
+    expect_true(string_list_push(&row, "7"), "prepare offset row id");
+    expect_true(string_list_push(&row, "Alice"), "prepare offset row name");
+    expect_true(string_list_push(&row, "20"), "prepare offset row age");
+
+    append_result = append_row_csv(data_dir, "users", &row);
+    expect_true(append_result.ok, "append row for offset roundtrip");
+    read_result = read_row_at_offset_csv(data_dir, "users", append_result.row_offset);
+    expect_true(read_result.ok, "read row back by stored offset");
+    if (read_result.ok) {
+        expect_true(read_result.fields.count == 3, "offset roundtrip returns expected column count");
+        expect_true(strcmp(read_result.fields.items[0], "7") == 0, "offset roundtrip preserves id");
+        expect_true(strcmp(read_result.fields.items[1], "Alice") == 0, "offset roundtrip preserves name");
+        expect_true(strcmp(read_result.fields.items[2], "20") == 0, "offset roundtrip preserves age");
+        string_list_free(&read_result.fields);
+    }
+
+    string_list_free(&row);
+}
+
+static void test_insert_failure_recovers_via_rebuild(void) {
+    char root[128];
+    char schema_dir[160];
+    char data_dir[160];
+    char schema_path[192];
+    char data_path[192];
+    char output_path[192];
+    char error[256];
+    char *csv_text;
+    char *output_text;
+    Statement insert_statement = {0};
+    Statement select_statement = {0};
+    ExecResult result;
+    FILE *output_file;
+
+    reset_runtime_state();
+    expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create forced register failure test directories");
+    build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
+    build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
+    build_child_path(output_path, sizeof(output_path), root, "forced_rebuild_output.txt");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write forced register failure schema");
+    expect_true(write_text_file(data_path, "id,name,age\n1,Bob,21\n"), "write forced register failure CSV");
+    expect_true(load_statement("INSERT INTO users (name) VALUES ('Alice');", &insert_statement), "build forced register failure INSERT");
+
+    table_index_force_next_register_failure();
+    result = execute_statement(&insert_statement, schema_dir, data_dir, stdout);
+    expect_true(!result.ok, "forced index registration failure returns error");
+    expect_true(!table_index_is_loaded("users"), "failed registration invalidates in-memory index");
+    csv_text = read_entire_file(data_path, error, sizeof(error));
+    expect_true(csv_text != NULL, "read CSV after forced index registration failure");
+    if (csv_text != NULL) {
+        expect_true(strstr(csv_text, "2,Alice,\"\"") != NULL, "CSV keeps appended row after registration failure");
+        free(csv_text);
+    }
+    free_statement(&insert_statement);
+
+    expect_true(load_statement("SELECT name FROM users WHERE id = 2;", &select_statement), "build SELECT after forced register failure");
+    output_file = fopen(output_path, "wb");
+    expect_true(output_file != NULL, "open output after forced register failure");
+    if (output_file == NULL) {
+        free_statement(&select_statement);
+        return;
+    }
+
+    result = execute_statement(&select_statement, schema_dir, data_dir, output_file);
+    fclose(output_file);
+    expect_true(result.ok, "rebuild after forced registration failure succeeds");
+    expect_true(table_index_is_loaded("users"), "rebuild after forced registration failure reloads index");
+    output_text = read_entire_file(output_path, error, sizeof(error));
+    expect_true(output_text != NULL, "read output after forced register failure recovery");
+    if (output_text != NULL) {
+        expect_true(strstr(output_text, "Alice") != NULL, "rebuild after forced registration failure finds appended row");
+        free(output_text);
+    }
+    free_statement(&select_statement);
+}
+
 static void test_benchmark_main_resets_dataset(void) {
     char root[128];
     char schema_dir[160];
@@ -698,6 +808,7 @@ static void test_benchmark_main_resets_dataset(void) {
 
 int main(void) {
     test_bptree_insert_and_search();
+    test_bptree_split_preserves_searchability();
     test_parser_where();
     test_parser_utf8_identifiers();
     test_schema_loading_with_alias_filename();
@@ -715,6 +826,8 @@ int main(void) {
     test_insert_requires_id_column();
     test_select_where_id_requires_id_column();
     test_csv_escape();
+    test_storage_row_offset_roundtrip();
+    test_insert_failure_recovers_via_rebuild();
     test_benchmark_main_resets_dataset();
 
     table_index_registry_reset();

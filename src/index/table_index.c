@@ -28,6 +28,7 @@ typedef struct {
 } RebuildContext;
 
 static TableIndexRegistry registry = {0};
+static int force_next_register_failure = 0;
 
 static TableIndex *find_table_index(const char *table_name) {
     int index;
@@ -153,6 +154,7 @@ void table_index_registry_reset(void) {
     registry.items = NULL;
     registry.count = 0;
     registry.capacity = 0;
+    force_next_register_failure = 0;
 }
 
 void table_index_invalidate(const char *table_name) {
@@ -186,6 +188,12 @@ int table_index_get_next_id(const Schema *schema, const char *data_dir, int *nex
 int table_index_register_row(const Schema *schema, const char *data_dir, int id, long row_offset, char *message, size_t message_size) {
     TableIndex *entry;
 
+    if (force_next_register_failure) {
+        force_next_register_failure = 0;
+        snprintf(message, message_size, "forced index registration failure");
+        return 0;
+    }
+
     if (!ensure_loaded(schema, data_dir, &entry, message, message_size)) {
         return 0;
     }
@@ -212,4 +220,8 @@ TableIndexLookupResult table_index_find_row(const Schema *schema, const char *da
     result.ok = 1;
     result.found = bptree_search(&entry->tree, id, &result.row_offset);
     return result;
+}
+
+void table_index_force_next_register_failure(void) {
+    force_next_register_failure = 1;
 }

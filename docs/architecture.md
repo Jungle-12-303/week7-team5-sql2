@@ -311,6 +311,7 @@ benchmark -> execution / storage / index
 - 테이블 인덱스 lazy load
 - `next_id` 계산
 - 오프셋 기반 행 조회
+- 인덱스 등록 실패 이후 무효화 상태 확인
 
 ### 12.2 기능 테스트
 
@@ -325,6 +326,7 @@ benchmark -> execution / storage / index
 - 대량 삽입 시간
 - 인덱스 기반 단건 조회 시간
 - 선형 탐색 기반 단건 조회 시간
+- 같은 입력 파라미터로 재실행했을 때 동일 데이터셋 재생성 확인
 
 ## 13. 아키텍처 요약
 
