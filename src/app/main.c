@@ -462,7 +462,14 @@ static int execute_argument_or_sql(const char *value, int force_file, FILE *out,
  * 사용자는 한 줄씩 SQL 또는 파일 경로를 입력할 수 있고,
  * .exit / .quit / help 같은 간단한 명령도 사용할 수 있다.
  */
-static int run_repl(FILE *out, FILE *err) {
+/*
+ * 접속 모드 설명:
+ * - 이 함수는 REPL(대화형 모드)을 담당한다.
+ * - 조건: 인자 없이 실행했고, 표준입력이 터미널에 직접 연결된 경우
+ * - 특징: `sqlparser>` 프롬프트를 반복 출력하며 여러 번 질의할 수 있다.
+ * - 지원 입력: SQL 문장, SQL 파일 경로, `.help`, `.exit`, `.quit`
+ */
+static int run_repl(FILE *out, FILE *err, const char *program_name) {
     /* 한 줄씩 입력받기 위한 REPL 전용 고정 버퍼다. */
     char line[4096];
     /* 세션 중 한 번이라도 오류가 나면 종료 코드에 반영하기 위해 기록한다. */
@@ -501,10 +508,9 @@ static int run_repl(FILE *out, FILE *err) {
             break;
         }
 
-        /* help 명령은 간단한 안내만 출력하고 SQL 실행은 하지 않는다. */
+        /* help 명령은 REPL 안에서도 전체 도움말을 다시 볼 수 있게 한다. */
         if (strcmp(input, ".help") == 0 || strcmp(input, "help") == 0) {
-            fprintf(out, "Enter a SQL statement or a SQL file path.\n");
-            fprintf(out, "Commands: .help, .exit, .quit\n");
+            print_usage(out, program_name);
             continue;
         }
 
@@ -519,6 +525,15 @@ static int run_repl(FILE *out, FILE *err) {
 
 // 명령줄 옵션과 표준입력을 해석해 실행할 SQL 문자열을 준비합니다.
 /* 비대화형 실행에서 CLI 인자를 해석해 최종 SQL 본문을 결정한다. */
+/*
+ * 비대화형 실행 모드 설명:
+ * - help 모드: `sqlparser --help`
+ * - 직접 실행 모드: `sqlparser -e "SELECT ..."`
+ * - 파일 실행 모드: `sqlparser -f query.sql`
+ * - stdin 모드: 파이프/리다이렉션, `-f -`, `sqlparser -`
+ * - bare argument 자동 판별 모드: 파일 경로 또는 SQL 문자열 하나
+ * - 여러 인자 결합 모드: SQL이 여러 argv 칸으로 들어온 경우
+ */
 static char *load_noninteractive_sql(int argc, char *argv[], char *error, size_t error_size, int *show_help) {
     /*
      * 인자가 없는데 표준입력이 터미널이 아니면
@@ -591,6 +606,17 @@ static char *load_noninteractive_sql(int argc, char *argv[], char *error, size_t
  * - help만 출력할지
  * - SQL을 한 번 실행하고 끝낼지
  */
+/*
+ * main()은 입력 방식에 따라 모드를 고르는 진입점이다.
+ *
+ * 전체 모드:
+ * - REPL 모드
+ * - help 모드
+ * - 비대화형 1회 실행 모드(-e, -f, stdin, bare argument)
+ *
+ * 즉, main()의 핵심 책임은 SQL 처리 자체보다
+ * "사용자가 어떤 방식으로 프로그램에 들어왔는지 분기하는 것"이다.
+ */
 int main(int argc, char *argv[]) {
     char error[256];
     char *sql_text;
@@ -599,7 +625,7 @@ int main(int argc, char *argv[]) {
 
     /* 인자 없이 터미널에서 실행된 경우는 REPL 모드로 진입한다. */
     if (argc == 1 && stdin_is_interactive()) {
-        exit_code = run_repl(stdout, stderr);
+        exit_code = run_repl(stdout, stderr, argv[0]);
         execution_runtime_reset();
         return exit_code;
     }
