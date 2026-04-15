@@ -1,17 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640">
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="360" viewBox="0 0 900 360">
   <defs>
     <style>
-      .title { font: 700 28px 'Segoe UI', 'Malgun Gothic', sans-serif; fill: #1f2937; }
+      .title { font: 700 26px 'Segoe UI', 'Malgun Gothic', sans-serif; fill: #1f2937; }
       .label { font: 700 18px 'Segoe UI', 'Malgun Gothic', sans-serif; fill: #111827; }
       .small { font: 500 14px 'Segoe UI', 'Malgun Gothic', sans-serif; fill: #374151; }
       .tiny { font: 500 12px 'Segoe UI', 'Malgun Gothic', sans-serif; fill: #475569; }
       .root { fill: #eff6ff; stroke: #2563eb; stroke-width: 2; rx: 18; }
-      .internal { fill: #f0fdf4; stroke: #16a34a; stroke-width: 2; rx: 18; }
-      .leaf { fill: #fff7ed; stroke: #ea580c; stroke-width: 2; rx: 16; }
-      .note { fill: #f8fafc; stroke: #334155; stroke-width: 2; rx: 18; }
+      .leaf { fill: #f0fdf4; stroke: #16a34a; stroke-width: 2; rx: 16; }
+      .note { fill: #fff7ed; stroke: #ea580c; stroke-width: 2; rx: 16; }
       .arrow { stroke: #475569; stroke-width: 3; fill: none; marker-end: url(#arrow); }
       .leaf-link { stroke: #16a34a; stroke-width: 3; fill: none; marker-end: url(#green-arrow); }
-      .guide { stroke: #94a3b8; stroke-width: 2; stroke-dasharray: 8 8; fill: none; }
     </style>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
       <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
@@ -21,87 +19,35 @@
     </marker>
   </defs>
 
-  <rect width="1200" height="640" fill="#fffdfa"/>
-  <text x="60" y="55" class="title">B+Tree 구조: id 기준 인덱스</text>
+  <rect width="900" height="360" fill="#fffdfa"/>
+  <text x="50" y="52" class="title">B+Tree 구조</text>
 
-  <rect x="510" y="95" width="180" height="90" class="root"/>
-  <text x="574" y="130" class="label">Root</text>
-  <text x="548" y="160" class="small">4 | 8 | 11</text>
+  <rect x="365" y="85" width="170" height="82" class="root"/>
+  <text x="424" y="118" class="label">Root</text>
+  <text x="412" y="145" class="small">1 | 2 | 6</text>
 
-  <rect x="140" y="250" width="170" height="86" class="internal"/>
-  <text x="190" y="283" class="label">Internal</text>
-  <text x="194" y="312" class="small">2 | 3</text>
+  <rect x="105" y="225" width="150" height="78" class="leaf"/>
+  <text x="153" y="255" class="label">Leaf</text>
+  <text x="159" y="281" class="small">1</text>
+  <text x="143" y="300" class="tiny">0x10</text>
 
-  <rect x="405" y="250" width="170" height="86" class="internal"/>
-  <text x="455" y="283" class="label">Internal</text>
-  <text x="460" y="312" class="small">5 | 7</text>
+  <rect x="375" y="225" width="150" height="78" class="leaf"/>
+  <text x="423" y="255" class="label">Leaf</text>
+  <text x="429" y="281" class="small">2</text>
+  <text x="413" y="300" class="tiny">0x20</text>
 
-  <rect x="670" y="250" width="170" height="86" class="internal"/>
-  <text x="720" y="283" class="label">Internal</text>
-  <text x="725" y="312" class="small">9 | 10</text>
+  <rect x="645" y="225" width="150" height="78" class="leaf"/>
+  <text x="693" y="255" class="label">Leaf</text>
+  <text x="699" y="281" class="small">6</text>
+  <text x="683" y="300" class="tiny">0x60</text>
 
-  <rect x="935" y="250" width="170" height="86" class="internal"/>
-  <text x="985" y="283" class="label">Internal</text>
-  <text x="984" y="312" class="small">12 | 13</text>
+  <path d="M405 167 C335 185 245 200 180 225" class="arrow"/>
+  <path d="M450 167 L450 225" class="arrow"/>
+  <path d="M495 167 C565 185 655 200 720 225" class="arrow"/>
 
-  <path d="M510 150 C380 165 280 195 225 250" class="arrow"/>
-  <path d="M555 185 C520 205 500 225 490 250" class="arrow"/>
-  <path d="M645 185 C700 205 745 225 755 250" class="arrow"/>
-  <path d="M690 150 C850 165 970 195 1020 250" class="arrow"/>
+  <path d="M255 264 L375 264" class="leaf-link"/>
+  <path d="M525 264 L645 264" class="leaf-link"/>
 
-  <rect x="60" y="425" width="130" height="86" class="leaf"/>
-  <text x="107" y="458" class="label">Leaf</text>
-  <text x="94" y="485" class="small">1 | 2</text>
-  <text x="86" y="506" class="tiny">0x10 | 0x20</text>
-
-  <rect x="220" y="425" width="120" height="86" class="leaf"/>
-  <text x="252" y="458" class="label">Leaf</text>
-  <text x="273" y="485" class="small">3</text>
-  <text x="265" y="506" class="tiny">0x30</text>
-
-  <rect x="370" y="425" width="130" height="86" class="leaf"/>
-  <text x="407" y="458" class="label">Leaf</text>
-  <text x="394" y="485" class="small">4 | 5</text>
-  <text x="386" y="506" class="tiny">0x40 | 0x50</text>
-
-  <rect x="530" y="425" width="120" height="86" class="leaf"/>
-  <text x="562" y="458" class="label">Leaf</text>
-  <text x="583" y="485" class="small">7</text>
-  <text x="575" y="506" class="tiny">0x70</text>
-
-  <rect x="680" y="425" width="130" height="86" class="leaf"/>
-  <text x="717" y="458" class="label">Leaf</text>
-  <text x="704" y="485" class="small">8 | 9</text>
-  <text x="696" y="506" class="tiny">0x80 | 0x90</text>
-
-  <rect x="840" y="425" width="120" height="86" class="leaf"/>
-  <text x="872" y="458" class="label">Leaf</text>
-  <text x="891" y="485" class="small">10</text>
-  <text x="885" y="506" class="tiny">0xA0</text>
-
-  <rect x="990" y="425" width="150" height="86" class="leaf"/>
-  <text x="1037" y="458" class="label">Leaf</text>
-  <text x="1024" y="485" class="small">11 | 12</text>
-  <text x="1016" y="506" class="tiny">0xB0 | 0xC0</text>
-
-  <path d="M190 336 C150 365 125 390 125 425" class="arrow"/>
-  <path d="M260 336 C295 365 280 390 280 425" class="arrow"/>
-  <path d="M455 336 C430 365 435 390 435 425" class="arrow"/>
-  <path d="M520 336 C600 365 590 390 590 425" class="arrow"/>
-  <path d="M725 336 C760 365 745 390 745 425" class="arrow"/>
-  <path d="M790 336 C875 365 900 390 900 425" class="arrow"/>
-  <path d="M980 336 C1025 365 1065 390 1065 425" class="arrow"/>
-
-  <path d="M190 468 L220 468" class="leaf-link"/>
-  <path d="M340 468 L370 468" class="leaf-link"/>
-  <path d="M500 468 L530 468" class="leaf-link"/>
-  <path d="M650 468 L680 468" class="leaf-link"/>
-  <path d="M810 468 L840 468" class="leaf-link"/>
-  <path d="M960 468 L990 468" class="leaf-link"/>
-
-  <path d="M60 380 L1140 380" class="guide"/>
-  <text x="65" y="398" class="tiny">Leaf 노드는 정렬된 순서로 연결되어 범위 탐색까지 확장하기 쉽다.</text>
-
-  <rect x="175" y="555" width="850" height="55" class="note"/>
-  <text x="220" y="588" class="small">이번 구현에서는 key = 내부 id, value = CSV row offset으로 저장하고 WHERE id 조회만 B+Tree 경로를 사용한다.</text>
+  <rect x="260" y="318" width="380" height="30" class="note"/>
+  <text x="291" y="338" class="tiny">key = 내부 id, value = CSV row offset</text>
 </svg>

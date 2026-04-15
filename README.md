@@ -12,6 +12,10 @@
 - `__internal_id`를 키로 사용하는 메모리 기반 B+ 트리를 만든다.
 - `WHERE id = <number>` 조회는 인덱스를 사용하고, 다른 컬럼 조건은 기존 선형 탐색을 유지한다.
 
+### B+Tree
+
+![Week 7 B+Tree Structure](docs/diagrams/week7-bptree-structure.svg)
+
 ### 핵심 구현
 
 - 기존 `INSERT`, `SELECT`, `SELECT ... WHERE` 흐름 유지
@@ -32,10 +36,6 @@
 ### 3. `WHERE id = ...` 조회 시 인덱스 사용
 
 ![Week 7 Select Id Flow](docs/diagrams/week7-select-id-flow.svg)
-
-### B+Tree
-
-![Week 7 B+Tree Structure](docs/diagrams/week7-bptree-structure.svg)
 
 ## 프로젝트가 푸는 문제
 
