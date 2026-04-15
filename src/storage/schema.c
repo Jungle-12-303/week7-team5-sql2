@@ -399,7 +399,12 @@ SchemaResult load_schema(const char *schema_dir, const char *data_dir, const cha
         return result;
     }
 
-    if (schema_find_id_column(&result.schema) >= 0) {
+    /*
+     * `id`는 사용자 컬럼이 아니라 숨은 내부 PK를 가리키는 예약 이름이다.
+     * 그래서 스키마 로딩 단계에서 먼저 막아 두어야 이후 parser/executor 쪽 해석이
+     * 흔들리지 않는다.
+     */
+    if (schema_find_reserved_id_column(&result.schema) >= 0) {
         free_schema(&result.schema);
         set_schema_error(&result, "reserved column name 'id' is not allowed in user schema");
         return result;
@@ -434,8 +439,8 @@ int schema_find_column(const Schema *schema, const char *column_name) {
     return string_list_index_of(&schema->columns, column_name);
 }
 
-/* id 컬럼의 위치를 찾는 편의 함수다. */
-int schema_find_id_column(const Schema *schema) {
+/* 사용자 스키마에 예약 이름 `id`가 들어 있는지 확인하는 편의 함수다. */
+int schema_find_reserved_id_column(const Schema *schema) {
     return schema_find_column(schema, "id");
 }
 

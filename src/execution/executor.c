@@ -271,7 +271,10 @@ static int build_select_indexes(const SelectStatement *statement, const Schema *
             continue;
         }
 
-        /* 일반 컬럼은 실제 스키마 위치를 찾아서 그대로 출력 대상으로 등록한다. */
+        /*
+         * 일반 컬럼은 실제 스키마 위치를 찾아서 그대로 출력 대상으로 등록한다.
+         * 나중에 row 조립 단계에서는 이 인덱스를 사용해 CSV 필드 배열에서 값을 꺼낸다.
+         */
         schema_index = schema_find_column(schema, statement->columns.items[index]);
         if (schema_index < 0) {
             snprintf(message, message_size, "unknown column in SELECT: %s", statement->columns.items[index]);
@@ -359,6 +362,14 @@ static int select_row_buffer_push(SelectRowBuffer *buffer, const StringList *fie
         buffer->capacity = new_capacity;
     }
 
+    /*
+     * fields는 "CSV 한 줄 전체"이고, row는 "사용자가 실제로 보고 싶어 하는 출력 컬럼만
+     * 골라 담은 결과 행"이다.
+     *
+     * 이 둘을 분리해 두면:
+     * - SELECT * 와 SELECT id, name 같은 경우를 같은 코드로 처리할 수 있고
+     * - 내부 id처럼 CSV에 없는 가상 컬럼도 자연스럽게 끼워 넣을 수 있다.
+     */
     for (index = 0; index < selected_count; index++) {
         if (selected_indexes[index] == INTERNAL_ID_SELECT_INDEX) {
             /*
@@ -457,6 +468,19 @@ static int print_result_table(FILE *out, const StringList *headers, const Select
     /*
      * 출력 로직은 "실제 조회"와 분리해 두었다.
      * 이렇게 하면 일반 SELECT와 인덱스 SELECT가 같은 표 렌더러를 재사용할 수 있다.
+     */
+    /*
+     * 표 출력은 항상
+     * 1. 열 너비 계산
+     * 2. 상단선
+     * 3. 헤더
+     * 4. 헤더 아래 구분선
+     * 5. 데이터 행들
+     * 6. 하단선
+     * 순서로 고정한다.
+     *
+     * 빈 결과도 같은 형식을 유지하므로, 사용자는 "데이터가 0건"인 상황과
+     * "출력 자체가 깨진 상황"을 쉽게 구분할 수 있다.
      */
     compute_table_widths(headers, rows, column_widths);
     print_table_border(out, column_widths, headers->count);
@@ -634,6 +658,11 @@ static ExecResult execute_select(const SelectStatement *statement, const char *s
     }
     free(path);
 
+    /*
+     * 첫 줄은 CSV 헤더다.
+     * load_schema() 단계에서 이미 스키마와 헤더의 일치 여부를 검증했으므로,
+     * 여기서는 "비어 있는 파일인지" 정도만 다시 확인한다.
+     */
     if (fgets(line, sizeof(line), file) == NULL) {
         fclose(file);
         free(selected_indexes);
@@ -643,6 +672,14 @@ static ExecResult execute_select(const SelectStatement *statement, const char *s
         return result;
     }
 
+    /*
+     * 일반 SELECT 경로에서는 CSV 데이터 행을 앞에서부터 읽으면서
+     * "몇 번째 데이터 행인가"를 기준으로 내부 PK를 다시 계산한다.
+     *
+     * 이 설계는 append-only 전제를 사용한다.
+     * 즉 CSV 파일 안에 내부 id를 저장하지 않더라도,
+     * 같은 파일을 같은 순서로 읽으면 같은 내부 PK를 다시 얻을 수 있다.
+     */
     while (fgets(line, sizeof(line), file) != NULL) {
         strip_line_endings(line);
         if (line[0] == '\0') {
@@ -670,6 +707,10 @@ static ExecResult execute_select(const SelectStatement *statement, const char *s
             return result;
         }
 
+        /*
+         * 현재 데이터 행의 내부 PK를 확정한다.
+         * 헤더 다음 첫 번째 데이터 행은 1, 그 다음은 2 ... 식으로 증가한다.
+         */
         row_internal_id = current_internal_id;
         current_internal_id++;
 
@@ -700,6 +741,10 @@ static ExecResult execute_select(const SelectStatement *statement, const char *s
 
     fclose(file);
 
+    /*
+     * 조회 자체가 끝난 뒤에는 항상 공통 표 렌더러로 마무리한다.
+     * 그래서 일반 WHERE, 전체 조회, 0건 조회가 모두 같은 출력 형식을 공유한다.
+     */
     if (!print_result_table(out, &headers, &rows, result.message, sizeof(result.message))) {
         free(selected_indexes);
         string_list_free(&headers);

@@ -37,8 +37,17 @@ SchemaResult load_schema(const char *schema_dir, const char *data_dir, const cha
 /* 특정 컬럼 이름의 위치를 찾아 인덱스를 돌려준다. 없으면 -1이다. */
 int schema_find_column(const Schema *schema, const char *column_name);
 
-/* id 컬럼의 위치를 찾아 돌려준다. 없으면 -1이다. */
-int schema_find_id_column(const Schema *schema);
+/*
+ * 사용자 스키마에 예약 이름 `id`가 포함되어 있는지 검사한다.
+ *
+ * 현재 설계에서 `id`는 숨은 내부 PK `__internal_id`를 가리키는 SQL 표면 이름으로
+ * 예약되어 있으므로, 사용자 스키마 컬럼명으로는 사용할 수 없다.
+ *
+ * 반환값:
+ * - 0 이상: 예약 이름 `id`가 등장한 위치
+ * - -1: 예약 이름 `id`가 없음
+ */
+int schema_find_reserved_id_column(const Schema *schema);
 
 /* Schema 내부의 동적 메모리를 정리한다. */
 void free_schema(Schema *schema);
