@@ -25,12 +25,14 @@ static int write_csv_header(const Schema *schema, const char *data_dir, char *me
     FILE *file;
     int index;
 
+    /* benchmark-workdir/data/<table>.csv 경로를 만든다. */
     path = build_path(data_dir, schema->storage_name, ".csv");
     if (path == NULL) {
         snprintf(message, message_size, "out of memory while building benchmark CSV path");
         return 0;
     }
 
+    /* wb 모드로 열면 기존 내용을 지우고 새 파일처럼 다시 쓸 수 있다. */
     file = fopen(path, "wb");
     free(path);
     if (file == NULL) {
@@ -38,6 +40,7 @@ static int write_csv_header(const Schema *schema, const char *data_dir, char *me
         return 0;
     }
 
+    /* 스키마에 정의된 컬럼 순서 그대로 CSV 헤더 한 줄을 다시 쓴다. */
     for (index = 0; index < schema->columns.count; index++) {
         if (index > 0) {
             fputc(',', file);
@@ -58,6 +61,10 @@ static int write_csv_header(const Schema *schema, const char *data_dir, char *me
 static char *make_value_text(const char *column_name, int row_number) {
     char buffer[128];
 
+    /*
+     * age는 숫자 컬럼처럼 보이도록 정수 값을 만들고,
+     * 나머지 컬럼은 columnName_rowNumber 규칙으로 반복 가능한 더미 데이터를 만든다.
+     */
     if (strcmp(column_name, "age") == 0) {
         snprintf(buffer, sizeof(buffer), "%d", 20 + (row_number % 50));
     } else {
@@ -77,6 +84,7 @@ static void free_generated_statement(Statement *statement) {
 static int build_insert_statement(const Schema *schema, int row_number, Statement *statement, char *message, size_t message_size) {
     int index;
 
+    /* 매 반복마다 새 Statement를 깨끗한 상태에서 시작한다. */
     memset(statement, 0, sizeof(*statement));
     statement->type = STATEMENT_INSERT;
     statement->as.insert_statement.table_name = copy_string(schema->table_name);
@@ -85,9 +93,14 @@ static int build_insert_statement(const Schema *schema, int row_number, Statemen
         return 0;
     }
 
+    /*
+     * 벤치마크 INSERT도 일반 SQL 처리기 경로를 그대로 타게 하기 위해
+     * parser 결과와 같은 형태의 Statement를 직접 구성한다.
+     */
     for (index = 0; index < schema->columns.count; index++) {
         char *value_text;
 
+        /* id는 시스템이 자동 부여하므로 벤치마크 입력에서는 제외한다. */
         if (strcmp(schema->columns.items[index], "id") == 0) {
             continue;
         }
@@ -113,6 +126,7 @@ static int build_insert_statement(const Schema *schema, int row_number, Statemen
 
 /* 벤치마크용 SELECT ... WHERE ... Statement 하나를 자동으로 구성한다. */
 static int build_select_statement(const char *table_name, const char *column_name, const char *value, Statement *statement) {
+    /* query-only 모드에서는 SELECT * FROM table WHERE column = value 형태를 직접 만든다. */
     memset(statement, 0, sizeof(*statement));
     statement->type = STATEMENT_SELECT;
     statement->as.select_statement.table_name = copy_string(table_name);
@@ -132,11 +146,19 @@ static double run_query_benchmark(const Statement *statement, const char *schema
     clock_t started;
     int index;
 
+    /*
+     * 실제 CLI 표 출력을 섞으면 시간 측정이 왜곡되므로
+     * 임시 파일(tmpfile)을 sink로 두고 질의만 반복 실행한다.
+     */
     sink = tmpfile();
     if (sink == NULL) {
         return -1.0;
     }
 
+    /*
+     * 같은 질의를 여러 번 실행해 평균 시간을 구한다.
+     * 한 번만 재면 캐시/스케줄링 영향이 커질 수 있기 때문이다.
+     */
     started = clock();
     for (index = 0; index < repeat_count; index++) {
         ExecResult result = execute_statement(statement, schema_dir, data_dir, sink);
@@ -144,6 +166,7 @@ static double run_query_benchmark(const Statement *statement, const char *schema
             fclose(sink);
             return -1.0;
         }
+        /* 다음 반복에서도 같은 sink를 재사용할 수 있도록 파일 상태를 초기화한다. */
         clearerr(sink);
         rewind(sink);
     }
@@ -189,22 +212,29 @@ static int run_prepare_mode(const char *schema_dir, const char *data_dir, const 
     double insert_time;
     clock_t insert_started;
 
+    /* 대상 테이블 스키마를 읽어야 어떤 컬럼에 어떤 더미 값을 넣을지 결정할 수 있다. */
     schema_result = load_schema(schema_dir, data_dir, table_name);
     if (!schema_result.ok) {
         fprintf(stderr, "error: %s\n", schema_result.message);
         return 1;
     }
 
+    /* 기존 benchmark CSV는 버리고 헤더만 남긴 새 데이터셋으로 시작한다. */
     if (!write_csv_header(&schema_result.schema, data_dir, schema_result.message, sizeof(schema_result.message))) {
         fprintf(stderr, "error: %s\n", schema_result.message);
         free_schema(&schema_result.schema);
         return 1;
     }
 
+    /*
+     * prepare는 "깨끗한 CSV + 빈 메모리 인덱스"에서 시작해야
+     * 항상 같은 입력이면 같은 데이터셋을 만들 수 있다.
+     */
     table_index_registry_reset();
     insert_started = clock();
     for (index = 0; index < row_count; index++) {
         ExecResult result;
+        /* 1행씩 일반 INSERT 경로를 호출해 실제 시스템과 같은 삽입 과정을 재현한다. */
         if (!build_insert_statement(&schema_result.schema, index + 1, &statement, schema_result.message, sizeof(schema_result.message))) {
             fprintf(stderr, "error: %s\n", schema_result.message);
             free_schema(&schema_result.schema);
@@ -240,12 +270,14 @@ static int run_query_only_mode(const char *schema_dir, const char *data_dir, con
     double indexed_time;
     double linear_time;
 
+    /* query-only는 이미 준비된 CSV를 그대로 읽기만 하므로 우선 스키마만 로드한다. */
     schema_result = load_schema(schema_dir, data_dir, table_name);
     if (!schema_result.ok) {
         fprintf(stderr, "error: %s\n", schema_result.message);
         return 1;
     }
 
+    /* id 외 다른 컬럼으로도 선형 탐색 비교를 해야 하므로 첫 번째 non-id 컬럼을 찾는다. */
     other_column = find_first_non_id_column(&schema_result.schema);
     if (other_column == NULL) {
         fprintf(stderr, "error: benchmark table must have at least one non-id column\n");
@@ -253,6 +285,12 @@ static int run_query_only_mode(const char *schema_dir, const char *data_dir, con
         return 1;
     }
 
+    /*
+     * 같은 레코드를 두 방식으로 찾기 위해
+     * - WHERE id = <target_id>
+     * - WHERE other_column = <generated value>
+     * 두 질의를 만든다.
+     */
     snprintf(id_text, sizeof(id_text), "%d", target_id);
     other_value = make_value_text(other_column, target_id);
     if (other_value == NULL ||
@@ -266,6 +304,10 @@ static int run_query_only_mode(const char *schema_dir, const char *data_dir, con
         return 1;
     }
 
+    /*
+     * 첫 id 질의가 인덱스 재구성 비용까지 먹지 않도록
+     * 측정 시작 전 런타임 인덱스 상태를 명시적으로 초기화한다.
+     */
     table_index_registry_reset();
     indexed_time = run_query_benchmark(&id_select, schema_dir, data_dir, query_repeat);
     linear_time = run_query_benchmark(&other_select, schema_dir, data_dir, query_repeat);

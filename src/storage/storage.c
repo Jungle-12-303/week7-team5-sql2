@@ -18,6 +18,7 @@ static int append_character(char **buffer, size_t *length, size_t *capacity, cha
     char *new_buffer;
     size_t new_capacity;
 
+    /* 문자를 하나 더 붙일 공간이 부족하면 버퍼를 두 배씩 늘린다. */
     if (*length + 1 >= *capacity) {
         new_capacity = *capacity == 0 ? 16 : *capacity * 2;
         new_buffer = (char *)realloc(*buffer, new_capacity);
@@ -70,13 +71,22 @@ int csv_parse_line(const char *line, StringList *fields, char *error, size_t err
     size_t capacity = 0;
     const char *cursor;
 
+    /*
+     * 이 파서는 CSV 한 줄을 왼쪽부터 한 글자씩 읽는다.
+     * 큰 규칙은:
+     * - 따옴표 밖의 쉼표는 필드 구분자
+     * - 따옴표 안의 쉼표는 데이터 본문
+     * - "" 는 실제 큰따옴표 한 글자
+     */
     for (cursor = line; ; cursor++) {
         char current = *cursor;
         char *field_text;
 
         if (in_quotes) {
+            /* 따옴표 안에서는 쉼표도 일반 문자처럼 그대로 누적한다. */
             if (current == '"') {
                 if (cursor[1] == '"') {
+                    /* CSV 규칙상 "" 는 실제 큰따옴표 한 글자를 뜻한다. */
                     if (!append_character(&buffer, &length, &capacity, '"')) {
                         free(buffer);
                         snprintf(error, error_size, "out of memory while parsing CSV");
@@ -84,6 +94,7 @@ int csv_parse_line(const char *line, StringList *fields, char *error, size_t err
                     }
                     cursor++;
                 } else {
+                    /* 닫는 따옴표를 만나면 이제 quoted field가 끝났다고 본다. */
                     in_quotes = 0;
                     just_closed_quote = 1;
                 }
@@ -100,6 +111,7 @@ int csv_parse_line(const char *line, StringList *fields, char *error, size_t err
         }
 
         if (current == '\0' || current == ',') {
+            /* 쉼표나 줄 끝을 만나면 지금까지 모은 내용을 필드 하나로 확정한다. */
             if (buffer == NULL) {
                 buffer = copy_string("");
                 if (buffer == NULL) {
@@ -108,6 +120,7 @@ int csv_parse_line(const char *line, StringList *fields, char *error, size_t err
                 }
             }
 
+            /* quoted field였다면 원문 그대로, 아니면 앞뒤 공백을 정리한 값을 저장한다. */
             field_text = just_closed_quote ? buffer : trim_whitespace(buffer);
             if (!string_list_push(fields, field_text)) {
                 free(buffer);
@@ -127,6 +140,7 @@ int csv_parse_line(const char *line, StringList *fields, char *error, size_t err
             continue;
         }
 
+        /* 필드의 첫 문자가 큰따옴표이면 quoted field 모드로 들어간다. */
         if (current == '"' && buffer == NULL) {
             in_quotes = 1;
             continue;
@@ -214,6 +228,7 @@ StorageResult append_row_csv(const char *data_dir, const char *table_name, const
         return result;
     }
 
+    /* 기존 파일 끝으로 이동해 새 행을 맨 뒤에 이어 붙인다. */
     if (fseek(file, 0, SEEK_END) != 0) {
         fclose(file);
         snprintf(result.message, sizeof(result.message), "failed to seek table file");
@@ -227,6 +242,10 @@ StorageResult append_row_csv(const char *data_dir, const char *table_name, const
         return result;
     }
 
+    /*
+     * 기존 파일이 마지막에 개행 없이 끝났다면
+     * 새 행을 쓰기 전에 줄바꿈을 하나 보정해 준다.
+     */
     if (file_size > 0) {
         if (fseek(file, -1L, SEEK_END) != 0) {
             fclose(file);
@@ -250,6 +269,7 @@ StorageResult append_row_csv(const char *data_dir, const char *table_name, const
         }
     }
 
+    /* 이 시점의 파일 위치가 곧 "방금 추가될 행의 시작 오프셋"이다. */
     result.row_offset = ftell(file);
     if (result.row_offset < 0) {
         fclose(file);
@@ -265,6 +285,7 @@ StorageResult append_row_csv(const char *data_dir, const char *table_name, const
             return result;
         }
 
+        /* CSV 규칙에 맞게 escape한 다음 각 필드를 쉼표로 이어 쓴다. */
         if (index > 0 && fputc(',', file) == EOF) {
             free(escaped);
             fclose(file);
@@ -299,6 +320,7 @@ StorageReadResult read_row_at_offset_csv(const char *data_dir, const char *table
         return result;
     }
 
+    /* 인덱스가 알려 준 바이트 위치로 직접 점프해 한 행만 읽는다. */
     if (fseek(file, row_offset, SEEK_SET) != 0) {
         fclose(file);
         snprintf(result.message, sizeof(result.message), "failed to seek row offset");
@@ -318,6 +340,7 @@ StorageReadResult read_row_at_offset_csv(const char *data_dir, const char *table
         return result;
     }
 
+    /* 오프셋에서 읽은 한 줄을 다시 CSV 필드 리스트로 파싱한다. */
     if (!csv_parse_line(line, &result.fields, result.message, sizeof(result.message))) {
         return result;
     }
@@ -338,6 +361,7 @@ int scan_rows_csv(const char *data_dir, const char *table_name, StorageRowVisito
         return 0;
     }
 
+    /* 첫 줄은 헤더이므로 읽고 버린 뒤 실제 데이터 행부터 순회한다. */
     if (fgets(line, sizeof(line), file) == NULL) {
         fclose(file);
         snprintf(error, error_size, "table data file is empty");
@@ -345,6 +369,7 @@ int scan_rows_csv(const char *data_dir, const char *table_name, StorageRowVisito
     }
 
     while (1) {
+        /* 다음 줄을 읽기 직전의 파일 위치가 그 줄의 시작 오프셋이다. */
         long row_offset = ftell(file);
         StringList fields = {0};
 
@@ -359,15 +384,18 @@ int scan_rows_csv(const char *data_dir, const char *table_name, StorageRowVisito
         }
 
         strip_line_endings(line);
+        /* 빈 줄은 무시하고 다음 행으로 넘어간다. */
         if (line[0] == '\0') {
             continue;
         }
 
+        /* 현재 행을 필드 리스트로 바꾼 뒤 visitor 콜백에 넘긴다. */
         if (!csv_parse_line(line, &fields, error, error_size)) {
             fclose(file);
             return 0;
         }
 
+        /* visitor가 실패하면 즉시 순회를 중단하고 에러를 전파한다. */
         if (!visitor(&fields, row_offset, context, error, error_size)) {
             string_list_free(&fields);
             fclose(file);

@@ -45,6 +45,7 @@ static int force_next_register_failure = 0;
 static TableIndex *find_table_index(const char *table_name) {
     int index;
 
+    /* 메모리에 이미 올라와 있는 테이블 인덱스가 있는지 선형 탐색으로 찾는다. */
     for (index = 0; index < registry.count; index++) {
         if (strcmp(registry.items[index].table_name, table_name) == 0) {
             return &registry.items[index];
@@ -61,10 +62,12 @@ static TableIndex *get_or_create_table_index(const char *table_name, char *messa
     int new_capacity;
     TableIndex *entry;
 
+    /* 이미 있으면 새로 만들 필요 없이 기존 엔트리를 재사용한다. */
     if (existing != NULL) {
         return existing;
     }
 
+    /* 레지스트리 배열이 꽉 차면 두 배씩 늘려 새 엔트리를 담을 공간을 만든다. */
     if (registry.count == registry.capacity) {
         new_capacity = registry.capacity == 0 ? 4 : registry.capacity * 2;
         new_items = (TableIndex *)realloc(registry.items, (size_t)new_capacity * sizeof(TableIndex));
@@ -77,6 +80,7 @@ static TableIndex *get_or_create_table_index(const char *table_name, char *messa
         registry.capacity = new_capacity;
     }
 
+    /* 새 엔트리는 0으로 초기화한 뒤 기본 next_id를 1로 시작한다. */
     entry = &registry.items[registry.count];
     memset(entry, 0, sizeof(*entry));
     entry->table_name = copy_string(table_name);
@@ -136,6 +140,7 @@ static int ensure_loaded(const Schema *schema, const char *data_dir, TableIndex 
     RebuildContext rebuild;
     int id_index;
 
+    /* 인덱스 기반 접근은 반드시 id 컬럼이 있어야만 의미가 있다. */
     id_index = schema_find_id_column(schema);
     if (id_index < 0) {
         snprintf(message, message_size, "id column is required for indexed access");
@@ -147,6 +152,10 @@ static int ensure_loaded(const Schema *schema, const char *data_dir, TableIndex 
         return 0;
     }
 
+    /*
+     * entry->loaded == 0 이면 아직 메모리 인덱스가 비어 있다는 뜻이다.
+     * 이 경우 CSV 전체를 다시 훑어 B+ 트리를 재구성한다.
+     */
     if (!entry->loaded) {
         bptree_free(&entry->tree);
         bptree_init(&entry->tree);
@@ -154,6 +163,7 @@ static int ensure_loaded(const Schema *schema, const char *data_dir, TableIndex 
         rebuild.tree = &entry->tree;
         rebuild.max_id = 0;
 
+        /* CSV 각 행마다 rebuild_row 콜백을 호출해 id -> offset을 트리에 쌓는다. */
         if (!scan_rows_csv(data_dir, schema->storage_name, rebuild_row, &rebuild, message, message_size)) {
             bptree_free(&entry->tree);
             bptree_init(&entry->tree);
@@ -162,6 +172,7 @@ static int ensure_loaded(const Schema *schema, const char *data_dir, TableIndex 
             return 0;
         }
 
+        /* 재구성이 끝나면 이후 INSERT 자동 id 계산용 next_id도 함께 갱신한다. */
         entry->loaded = 1;
         entry->next_id = rebuild.max_id + 1;
     }
@@ -221,20 +232,24 @@ int table_index_get_next_id(const Schema *schema, const char *data_dir, int *nex
 int table_index_register_row(const Schema *schema, const char *data_dir, int id, long row_offset, char *message, size_t message_size) {
     TableIndex *entry;
 
+    /* 테스트에서는 한 번의 등록 실패를 강제로 유도해 복구 경로를 검증할 수 있다. */
     if (force_next_register_failure) {
         force_next_register_failure = 0;
         snprintf(message, message_size, "forced index registration failure");
         return 0;
     }
 
+    /* 등록 전에 해당 테이블 인덱스가 메모리에 준비돼 있는지 먼저 보장한다. */
     if (!ensure_loaded(schema, data_dir, &entry, message, message_size)) {
         return 0;
     }
 
+    /* 새로 append한 행의 id와 파일 오프셋을 B+ 트리에 즉시 반영한다. */
     if (!bptree_insert(&entry->tree, id, row_offset, message, message_size)) {
         return 0;
     }
 
+    /* 방금 들어온 id가 현재 next_id 이상이면 다음 자동 id도 밀어 올린다. */
     if (id >= entry->next_id) {
         entry->next_id = id + 1;
     }
@@ -247,10 +262,12 @@ TableIndexLookupResult table_index_find_row(const Schema *schema, const char *da
     TableIndexLookupResult result = {0};
     TableIndex *entry;
 
+    /* 첫 조회라면 여기서 CSV 기반 재구성이 일어날 수 있다. */
     if (!ensure_loaded(schema, data_dir, &entry, result.message, sizeof(result.message))) {
         return result;
     }
 
+    /* 재구성된 B+ 트리에서 id를 검색해 대응하는 CSV 오프셋을 찾는다. */
     result.ok = 1;
     result.found = bptree_search(&entry->tree, id, &result.row_offset);
     return result;
