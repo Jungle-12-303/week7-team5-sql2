@@ -235,7 +235,7 @@ SELECT * FROM 학생 WHERE id = 1000;
 발표에서는 prepare로 100만 건 데이터셋을 미리 만들어 두고, 시연 시간에는 query-only로 조회 시간만 비교한 뒤 아래처럼 일반 CLI로 실제 조회 결과 표를 보여 주면 흐름이 자연스럽습니다.
 
 ```bash
-./build/bin/sqlparser -e "SELECT * FROM 학생 WHERE id = 500000;"
+./build/bin/sqlparser -e "SELECT id, department, student_number, name, age FROM 학생 WHERE id = 500000;"
 ```
 
 ## 빌드
@@ -275,11 +275,17 @@ SQL 문자열 직접 실행:
 출력 예시:
 
 ```text
-+----+----------------+----------------+--------+-----+
-| id | department     | student_number | name   | age |
-+----+----------------+----------------+--------+-----+
-| 1  | 컴퓨터공학과   | 2024001        | 김민수 | 20  |
-+----+----------------+----------------+--------+-----+
++----------------+----------------+--------+-----+
+| department     | student_number | name   | age |
++----------------+----------------+--------+-----+
+| 컴퓨터공학과   | 2024001        | 김민수 | 20  |
++----------------+----------------+--------+-----+
+```
+
+내부 PK 확인 시연은 `SELECT id, ...` 형태를 사용합니다.
+
+```bash
+./build/bin/sqlparser -e "SELECT id, name FROM 학생 WHERE id = 1;"
 ```
 
 SQL 파일 실행:
@@ -331,8 +337,8 @@ docker run --rm -v "C:/developer_folder/jungle-sql-processor-2nd:/workspace" -w 
 
 현재 테스트 러너 기준:
 
-- 상위 테스트 함수 `29개`
-- assertion `345개`
+- 상위 테스트 함수 `31개`
+- assertion `375개`
 
 실행:
 
@@ -389,7 +395,7 @@ make test
 make benchmark
 ./build/bin/benchmark_runner prepare benchmark-workdir/schema benchmark-workdir/data student 1000000
 ./build/bin/benchmark_runner query-only benchmark-workdir/schema benchmark-workdir/data student 500000 10
-./build/bin/sqlparser -e "SELECT * FROM 학생 WHERE id = 500000;"
+./build/bin/sqlparser -e "SELECT id, department, student_number, name, age FROM 학생 WHERE id = 500000;"
 ```
 
 참고:
@@ -403,7 +409,7 @@ make benchmark
 - 단일 CLI 첫 실행은 인덱스 재구성 비용이 섞일 수 있으므로, 발표에서는 `query-only` 기준 평균 시간을 해석하는 것이 맞습니다.
 - 시연은 `10`회 반복으로 빠르게 보여주고, 아래 `100`회 반복 결과는 참고 자료로 함께 제시합니다.
 
-![Indexing Result Comparison](docs/images/indexing-result-comparison-highlighted.png)
+![Indexing Result Comparison](docs/images/indexing-result-comparison-highlighted.png2.png)
 
 출력:
 
