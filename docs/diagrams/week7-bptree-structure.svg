@@ -36,7 +36,7 @@
     <rect x="70" y="0" width="150" height="66" class="card rootCard"/>
     <text x="25" y="40" class="cardTitle">01</text>
     <text x="94" y="27" class="cardTitle">ROOT</text>
-    <text x="94" y="51" class="keyText">3 | 5 | 9</text>
+    <text x="94" y="51" class="keyText">4 | 7</text>
   </g>
 
   <text x="518" y="130" class="chevron">&gt;</text>
@@ -46,7 +46,7 @@
     <rect x="58" y="0" width="150" height="66" class="card internalCard"/>
     <text x="20" y="40" class="cardTitle">02</text>
     <text x="82" y="27" class="cardTitle">INTERNAL</text>
-    <text x="82" y="51" class="keyText">1 | 2</text>
+    <text x="82" y="51" class="keyText">2 | 3</text>
   </g>
 
   <g transform="translate(570 134)">
@@ -54,7 +54,7 @@
     <rect x="58" y="0" width="150" height="66" class="card internalCard"/>
     <text x="20" y="40" class="cardTitle">03</text>
     <text x="82" y="27" class="cardTitle">INTERNAL</text>
-    <text x="82" y="51" class="keyText">4 | 5</text>
+    <text x="82" y="51" class="keyText">5 | 6</text>
   </g>
 
   <g transform="translate(570 234)">
@@ -62,7 +62,7 @@
     <rect x="58" y="0" width="150" height="66" class="card internalCard"/>
     <text x="20" y="40" class="cardTitle">04</text>
     <text x="82" y="27" class="cardTitle">INTERNAL</text>
-    <text x="82" y="51" class="keyText">7 | 9</text>
+    <text x="82" y="51" class="keyText">8 | 9</text>
   </g>
 
   <path d="M490 119 L530 119 L530 67 L570 67" class="treeLine"/>
@@ -86,7 +86,7 @@
     <rect x="54" y="0" width="120" height="60" class="card leafCard"/>
     <text x="18" y="37" class="cardTitle">06</text>
     <text x="78" y="22" class="cardTitle">LEAF</text>
-    <text x="78" y="43" class="keyText">2</text>
+    <text x="78" y="43" class="keyText">2 | 3</text>
   </g>
 
   <g transform="translate(858 148)">
@@ -102,7 +102,7 @@
     <rect x="54" y="0" width="120" height="60" class="card leafCard"/>
     <text x="18" y="37" class="cardTitle">08</text>
     <text x="78" y="22" class="cardTitle">LEAF</text>
-    <text x="78" y="43" class="keyText">5</text>
+    <text x="78" y="43" class="keyText">5 | 6</text>
   </g>
 
   <g transform="translate(858 296)">
@@ -118,7 +118,7 @@
     <rect x="54" y="0" width="120" height="60" class="card leafCard"/>
     <text x="18" y="37" class="cardTitle">10</text>
     <text x="78" y="22" class="cardTitle">LEAF</text>
-    <text x="78" y="43" class="keyText">9</text>
+    <text x="78" y="43" class="keyText">8 | 9</text>
   </g>
 
   <path d="M778 67 L818 67 L818 30 L858 30" class="treeLine"/>
