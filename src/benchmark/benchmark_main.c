@@ -1,3 +1,12 @@
+/*
+ * benchmark/benchmark_main.c
+ *
+ * 이 파일은 일반 CLI와 분리된 성능 측정 전용 진입점이다.
+ * 같은 스키마로 대량 INSERT를 수행한 뒤,
+ * - WHERE id = ...
+ * - 일반 컬럼 WHERE ...
+ * 의 평균 조회 시간을 비교한다.
+ */
 #include "sqlparser/benchmark/benchmark.h"
 
 #include "sqlparser/common/util.h"
@@ -10,6 +19,7 @@
 #include <string.h>
 #include <time.h>
 
+/* 벤치마크 시작 전에 CSV를 헤더만 남긴 초기 상태로 다시 만든다. */
 static int write_csv_header(const Schema *schema, const char *data_dir, char *message, size_t message_size) {
     char *path;
     FILE *file;
@@ -44,6 +54,7 @@ static int write_csv_header(const Schema *schema, const char *data_dir, char *me
     return 1;
 }
 
+/* 벤치마크용 더미 데이터 값을 컬럼 이름과 행 번호 기준으로 재현 가능하게 만든다. */
 static char *make_value_text(const char *column_name, int row_number) {
     char buffer[128];
 
@@ -56,11 +67,13 @@ static char *make_value_text(const char *column_name, int row_number) {
     return copy_string(buffer);
 }
 
+/* 벤치마크 중 임시로 만든 Statement를 정리하고 구조체를 초기화한다. */
 static void free_generated_statement(Statement *statement) {
     free_statement(statement);
     memset(statement, 0, sizeof(*statement));
 }
 
+/* 벤치마크용 INSERT Statement 하나를 자동으로 구성한다. */
 static int build_insert_statement(const Schema *schema, int row_number, Statement *statement, char *message, size_t message_size) {
     int index;
 
@@ -98,6 +111,7 @@ static int build_insert_statement(const Schema *schema, int row_number, Statemen
     return 1;
 }
 
+/* 벤치마크용 SELECT ... WHERE ... Statement 하나를 자동으로 구성한다. */
 static int build_select_statement(const char *table_name, const char *column_name, const char *value, Statement *statement) {
     memset(statement, 0, sizeof(*statement));
     statement->type = STATEMENT_SELECT;
@@ -112,6 +126,7 @@ static int build_select_statement(const char *table_name, const char *column_nam
            statement->as.select_statement.where_value != NULL;
 }
 
+/* 같은 질의를 여러 번 실행해 평균 시간을 계산한다. */
 static double run_query_benchmark(const Statement *statement, const char *schema_dir, const char *data_dir, int repeat_count) {
     FILE *sink;
     clock_t started;
@@ -137,6 +152,23 @@ static double run_query_benchmark(const Statement *statement, const char *schema
     return ((double)(clock() - started) / (double)CLOCKS_PER_SEC) / (double)repeat_count;
 }
 
+/*
+ * 벤치마크 프로그램의 실제 메인 로직이다.
+ *
+ * 입력:
+ * - schema_dir
+ * - data_dir
+ * - table_name
+ * - row_count
+ * - query_repeat(선택)
+ *
+ * 순서:
+ * 1. schema 로딩
+ * 2. CSV 초기화
+ * 3. 대량 INSERT
+ * 4. id 조회와 일반 컬럼 조회를 반복 측정
+ * 5. 결과 출력
+ */
 int benchmark_main(int argc, char *argv[]) {
     const char *schema_dir;
     const char *data_dir;
@@ -263,6 +295,7 @@ int benchmark_main(int argc, char *argv[]) {
 }
 
 #ifndef SQLPARSER_BENCHMARK_NO_MAIN
+/* 독립 실행 바이너리일 때 사용하는 실제 main 함수다. */
 int main(int argc, char *argv[]) {
     return benchmark_main(argc, argv);
 }

@@ -1,3 +1,10 @@
+/*
+ * index/bptree.c
+ *
+ * 이 파일은 메모리 기반 B+ 트리 자료구조 자체를 구현한다.
+ * table_index.c가 "테이블별 인덱스 운영"을 맡는다면,
+ * bptree.c는 그 아래에서 "키를 어떻게 저장하고 찾는가"만 책임진다.
+ */
 #include "sqlparser/index/bptree.h"
 
 #include <stdio.h>
@@ -25,6 +32,7 @@ typedef struct {
 
 static InsertState insert_into_node(struct BPlusTreeNode *node, int key, long value);
 
+/* 리프/내부 노드를 구분해 새 B+ 트리 노드를 만든다. */
 static struct BPlusTreeNode *create_node(int is_leaf) {
     struct BPlusTreeNode *node = (struct BPlusTreeNode *)calloc(1, sizeof(struct BPlusTreeNode));
     if (node != NULL) {
@@ -33,6 +41,7 @@ static struct BPlusTreeNode *create_node(int is_leaf) {
     return node;
 }
 
+/* 노드와 그 하위 노드를 재귀적으로 모두 해제한다. */
 static void free_node(struct BPlusTreeNode *node) {
     int index;
 
@@ -49,6 +58,7 @@ static void free_node(struct BPlusTreeNode *node) {
     free(node);
 }
 
+/* 내부 노드에서 어떤 자식으로 내려가야 하는지 계산한다. */
 static int find_child_index(const struct BPlusTreeNode *node, int key) {
     int index = 0;
 
@@ -59,6 +69,7 @@ static int find_child_index(const struct BPlusTreeNode *node, int key) {
     return index;
 }
 
+/* 삽입 실패 결과를 만드는 작은 헬퍼 함수다. */
 static InsertState make_error(const char *message) {
     InsertState state = {0};
     state.ok = 0;
@@ -66,6 +77,14 @@ static InsertState make_error(const char *message) {
     return state;
 }
 
+/*
+ * 리프 노드에 키/값을 삽입한다.
+ *
+ * 노드가 넘치면:
+ * - 오른쪽 노드를 새로 만들고
+ * - 절반을 옮기고
+ * - 부모에게 올릴 promoted_key를 준비한다.
+ */
 static InsertState insert_into_leaf(struct BPlusTreeNode *node, int key, long value) {
     InsertState state = {0};
     int insert_index = 0;
@@ -117,6 +136,10 @@ static InsertState insert_into_leaf(struct BPlusTreeNode *node, int key, long va
     return state;
 }
 
+/*
+ * 내부 노드 아래로 재귀 삽입을 수행한다.
+ * 자식 노드가 분할되면 그 결과를 현재 노드에 반영한다.
+ */
 static InsertState insert_into_internal(struct BPlusTreeNode *node, int key, long value) {
     InsertState child_state;
     InsertState state = {0};
@@ -172,6 +195,7 @@ static InsertState insert_into_internal(struct BPlusTreeNode *node, int key, lon
     return state;
 }
 
+/* 현재 노드가 리프인지 내부인지에 따라 적절한 삽입 함수를 호출한다. */
 static InsertState insert_into_node(struct BPlusTreeNode *node, int key, long value) {
     if (node->is_leaf) {
         return insert_into_leaf(node, key, value);
@@ -180,15 +204,21 @@ static InsertState insert_into_node(struct BPlusTreeNode *node, int key, long va
     return insert_into_internal(node, key, value);
 }
 
+/* 비어 있는 B+ 트리 구조를 초기화한다. */
 void bptree_init(BPlusTree *tree) {
     tree->root = NULL;
 }
 
+/* 트리 전체 메모리를 해제하고 루트를 NULL로 되돌린다. */
 void bptree_free(BPlusTree *tree) {
     free_node(tree->root);
     tree->root = NULL;
 }
 
+/*
+ * B+ 트리에 key -> value 쌍을 삽입하는 공개 함수다.
+ * 루트가 분할되면 새 루트를 만들어 트리 높이를 한 단계 올린다.
+ */
 int bptree_insert(BPlusTree *tree, int key, long value, char *message, size_t message_size) {
     InsertState state;
     struct BPlusTreeNode *new_root;
@@ -230,6 +260,7 @@ int bptree_insert(BPlusTree *tree, int key, long value, char *message, size_t me
     return 1;
 }
 
+/* key를 검색해 대응하는 value(현재는 CSV 오프셋)를 찾아낸다. */
 int bptree_search(const BPlusTree *tree, int key, long *value) {
     struct BPlusTreeNode *node = tree->root;
     int index;

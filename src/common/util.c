@@ -1,4 +1,11 @@
 // util.h에 선언된 공통 함수들의 실제 구현 파일이다.
+/*
+ * common/util.c
+ *
+ * 이 파일은 여러 계층에서 공통으로 사용하는 보조 함수를 모아 둔 곳이다.
+ * 직접 SQL을 해석하거나 실행하지는 않지만,
+ * 문자열 복사, 파일 읽기, 경로 만들기, 에러 메시지 정리 같은 반복 작업을 맡는다.
+ */
 #include "sqlparser/common/util.h"
 
 // 공백 판별과 소문자 변환 함수를 쓰기 위해 포함한다.
@@ -12,6 +19,7 @@
 // strlen, memcpy 같은 문자열 함수를 쓰기 위해 포함한다.
 #include <string.h>
 
+/* 파일 전체를 읽어 하나의 C 문자열로 반환한다. */
 char *read_entire_file(const char *path, char *error, size_t error_size) {
     // 읽을 파일 핸들이다.
     FILE *file;
@@ -80,6 +88,7 @@ char *read_entire_file(const char *path, char *error, size_t error_size) {
     return buffer;
 }
 
+/* 문자열을 새 메모리에 복사해 소유권을 분리한다. */
 char *copy_string(const char *source) {
     // 원본 문자열 길이다.
     size_t length;
@@ -105,6 +114,7 @@ char *copy_string(const char *source) {
     return copy;
 }
 
+/* 대소문자를 무시하고 두 문자열이 같은지 비교한다. */
 int strings_equal_ignore_case(const char *left, const char *right) {
     // 현재 비교 중인 왼쪽 문자다.
     unsigned char left_char;
@@ -135,6 +145,7 @@ int strings_equal_ignore_case(const char *left, const char *right) {
     return *left == '\0' && *right == '\0';
 }
 
+/* 문자열 앞뒤 공백을 제거한 실제 내용의 시작 위치를 돌려준다. */
 char *trim_whitespace(char *text) {
     // 문자열 끝을 가리킬 포인터다.
     char *end;
@@ -162,6 +173,7 @@ char *trim_whitespace(char *text) {
     return text;
 }
 
+/* 줄 끝의 \r, \n 문자를 제거해 파싱하기 쉬운 형태로 만든다. */
 void strip_line_endings(char *text) {
     // 현재 문자열 길이다.
     size_t length;
@@ -180,6 +192,7 @@ void strip_line_endings(char *text) {
     }
 }
 
+/* StringList 동적 배열 끝에 문자열 하나를 복사해 추가한다. */
 int string_list_push(StringList *list, const char *value) {
     // 배열이 커질 때 새로 잡을 크기다.
     int new_capacity;
@@ -215,6 +228,7 @@ int string_list_push(StringList *list, const char *value) {
     return 1;
 }
 
+/* StringList에서 특정 문자열의 위치를 찾고, 없으면 -1을 반환한다. */
 int string_list_index_of(const StringList *list, const char *value) {
     // 리스트를 순회할 인덱스다.
     int index;
@@ -230,6 +244,7 @@ int string_list_index_of(const StringList *list, const char *value) {
     return -1;
 }
 
+/* StringList가 소유한 모든 문자열과 배열 메모리를 해제한다. */
 void string_list_free(StringList *list) {
     // 배열 안의 각 문자열을 순회하기 위한 인덱스다.
     int index;
@@ -247,6 +262,7 @@ void string_list_free(StringList *list) {
     list->capacity = 0;
 }
 
+/* dir/name.extension 형태의 경로 문자열을 만든다. */
 char *build_path(const char *dir, const char *name, const char *extension) {
     // 완성될 경로 문자열 길이다.
     size_t length;
@@ -266,6 +282,7 @@ char *build_path(const char *dir, const char *name, const char *extension) {
     return path;
 }
 
+/* 문자열이 정확한 정수인지 엄격하게 검사하고 int로 변환한다. */
 int parse_int_strict(const char *text, int *value) {
     char *end = NULL;
     long parsed;
@@ -288,6 +305,7 @@ int parse_int_strict(const char *text, int *value) {
     return 1;
 }
 
+/* errno를 포함한 시스템 오류를 사람이 읽기 쉬운 문장으로 정리한다. */
 void format_system_error(char *error, size_t error_size, const char *action, const char *path) {
     const char *reason = strerror(errno);
 

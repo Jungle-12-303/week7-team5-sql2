@@ -1,3 +1,10 @@
+/*
+ * storage/storage.c
+ *
+ * 이 파일은 실제 CSV 읽기/쓰기 로직을 담당한다.
+ * schema.c가 "이 테이블이 유효한가"를 확인한다면,
+ * storage.c는 "실제 파일에 어떻게 저장하고 읽는가"를 담당한다고 보면 된다.
+ */
 #include "sqlparser/storage/storage.h"
 
 #include "sqlparser/common/util.h"
@@ -6,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* 동적 문자열 버퍼 뒤에 문자 하나를 붙이는 내부 헬퍼 함수다. */
 static int append_character(char **buffer, size_t *length, size_t *capacity, char value) {
     char *new_buffer;
     size_t new_capacity;
@@ -27,6 +35,7 @@ static int append_character(char **buffer, size_t *length, size_t *capacity, cha
     return 1;
 }
 
+/* data/<table>.csv 파일을 열고, 실패 시 표준화된 오류 메시지를 만든다. */
 static FILE *open_table_file(const char *data_dir, const char *table_name, const char *mode, char *error, size_t error_size) {
     char *path = build_path(data_dir, table_name, ".csv");
     FILE *file;
@@ -48,6 +57,11 @@ static FILE *open_table_file(const char *data_dir, const char *table_name, const
     return file;
 }
 
+/*
+ * CSV 한 줄을 StringList 필드 목록으로 파싱한다.
+ *
+ * 큰따옴표 처리, 쉼표 구분, escaped quote("") 처리까지 담당한다.
+ */
 int csv_parse_line(const char *line, StringList *fields, char *error, size_t error_size) {
     int in_quotes = 0;
     int just_closed_quote = 0;
@@ -136,6 +150,7 @@ int csv_parse_line(const char *line, StringList *fields, char *error, size_t err
     return 1;
 }
 
+/* 문자열 하나를 CSV 규칙에 맞는 필드 표현으로 바꾼다. */
 char *csv_escape_field(const char *value) {
     int needs_quotes = 0;
     size_t index;
@@ -178,6 +193,15 @@ char *csv_escape_field(const char *value) {
     return escaped;
 }
 
+/*
+ * 완성된 행 하나를 CSV 끝에 추가한다.
+ *
+ * 성공하면:
+ * - INSERT 1 메시지
+ * - 영향을 받은 행 수
+ * - 새 행의 시작 오프셋
+ * 을 함께 반환한다.
+ */
 StorageResult append_row_csv(const char *data_dir, const char *table_name, const StringList *row_values) {
     StorageResult result = {0};
     FILE *file = open_table_file(data_dir, table_name, "r+b", result.message, sizeof(result.message));
@@ -265,6 +289,7 @@ StorageResult append_row_csv(const char *data_dir, const char *table_name, const
     return result;
 }
 
+/* 특정 바이트 오프셋에서 시작하는 CSV 행 하나만 읽어 오는 함수다. */
 StorageReadResult read_row_at_offset_csv(const char *data_dir, const char *table_name, long row_offset) {
     StorageReadResult result = {0};
     FILE *file = open_table_file(data_dir, table_name, "rb", result.message, sizeof(result.message));
@@ -301,6 +326,10 @@ StorageReadResult read_row_at_offset_csv(const char *data_dir, const char *table
     return result;
 }
 
+/*
+ * CSV 전체를 한 줄씩 순회하며 visitor 콜백을 호출한다.
+ * 인덱스 재구성처럼 "모든 행을 다시 읽어야 하는 작업"에 사용된다.
+ */
 int scan_rows_csv(const char *data_dir, const char *table_name, StorageRowVisitor visitor, void *context, char *error, size_t error_size) {
     FILE *file = open_table_file(data_dir, table_name, "rb", error, error_size);
     char line[4096];

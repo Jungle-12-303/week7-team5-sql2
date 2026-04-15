@@ -1,4 +1,14 @@
 // AST 구조체를 해제하기 위한 선언입니다.
+/*
+ * app/main.c
+ *
+ * 이 파일은 프로그램의 시작점이다.
+ * 사용자가 CLI 인자를 줬는지, 파일을 실행하려는지, SQL 문자열을 직접 넣었는지,
+ * 아니면 REPL로 대화형 입력을 원하는지를 판단해 전체 흐름을 시작한다.
+ *
+ * 아키텍처 관점에서 app 계층은 "입력 방식 결정"만 담당하고,
+ * 실제 SQL 해석과 실행은 각각 lexer/parser/executor에 맡긴다.
+ */
 #include "sqlparser/sql/ast.h"
 // 파싱된 SQL을 실제로 실행하기 위한 선언입니다.
 #include "sqlparser/execution/executor.h"
@@ -36,6 +46,7 @@
 #endif
 
 // 전달받은 인자가 실제 파일 경로인지 간단히 검사합니다.
+/* 단순히 "이 경로를 파일로 열 수 있는가"를 확인하는 작은 헬퍼 함수다. */
 static int file_exists(const char *path) {
     // 파일을 열어 존재 여부를 확인할 포인터입니다.
     FILE *file;
@@ -52,6 +63,14 @@ static int file_exists(const char *path) {
     return 0;
 }
 
+/*
+ * bare argument가 "파일 경로인지" 아니면 "그냥 SQL 문자열인지" 판단한다.
+ *
+ * 예:
+ * - users.sql  -> 파일로 읽기
+ * - SELECT ... -> SQL 문자열로 간주
+ * - 디렉터리 경로 -> 오류
+ */
 static int resolve_bare_argument_file(const char *path, int *should_read_file, char *error, size_t error_size) {
     STAT_STRUCT info;
 
@@ -85,6 +104,7 @@ static int resolve_bare_argument_file(const char *path, int *should_read_file, c
 }
 
 // 표준입력이 터미널에 연결된 대화형 환경인지 확인합니다.
+/* 표준입력이 터미널에 연결됐는지 확인해 REPL 여부를 판단한다. */
 static int stdin_is_interactive(void) {
 #ifdef _MSC_VER
     return ISATTY(_fileno(stdin)) != 0;
@@ -94,6 +114,7 @@ static int stdin_is_interactive(void) {
 }
 
 // 공백만 있는 문자열인지 검사합니다.
+/* 공백만 있는 입력인지 검사해 빈 SQL을 빠르게 걸러낸다. */
 static int is_blank_string(const char *text) {
     while (*text != '\0') {
         if (!isspace((unsigned char)*text)) {
@@ -106,6 +127,7 @@ static int is_blank_string(const char *text) {
 }
 
 // 여러 개로 나뉘어 들어온 명령줄 인자를 하나의 SQL 문자열로 합칩니다.
+/* 여러 CLI 인자를 하나의 SQL 문자열로 합친다. */
 static char *join_arguments_as_sql(int argc, char *argv[], int start_index, char *error, size_t error_size) {
     // 최종 SQL 문자열에 필요한 전체 길이입니다.
     size_t total_length = 1;
@@ -160,6 +182,7 @@ static char *join_arguments_as_sql(int argc, char *argv[], int start_index, char
 }
 
 // 파일이나 파이프처럼 길이를 알 수 없는 입력 스트림 전체를 메모리로 읽습니다.
+/* stdin 같은 스트림 전체를 읽어 하나의 문자열로 만든다. */
 static char *read_stream(FILE *stream, char *error, size_t error_size) {
     char chunk[1024];
     char *buffer = NULL;
@@ -211,6 +234,7 @@ static char *read_stream(FILE *stream, char *error, size_t error_size) {
 }
 
 // 파일 경로인지 SQL 문자열인지 판단해 실제 SQL 본문을 읽어 옵니다.
+/* 인자를 파일로 읽을지, SQL 문자열로 그대로 쓸지 결정해 SQL 본문을 준비한다. */
 static char *load_sql_from_argument(const char *value, int force_file, char *error, size_t error_size) {
     int should_read_file = 0;
 
@@ -230,6 +254,7 @@ static char *load_sql_from_argument(const char *value, int force_file, char *err
 }
 
 // 사용자에게 보여줄 CLI 사용법을 출력합니다.
+/* 사용자가 --help 또는 잘못된 인자를 넣었을 때 보여 줄 도움말을 출력한다. */
 static void print_usage(FILE *stream, const char *program_name) {
     fprintf(stream, "Usage: %s [OPTION]... [SQL_OR_FILE]\n", program_name);
     fprintf(stream, "       %s\n", program_name);
@@ -250,6 +275,16 @@ static void print_usage(FILE *stream, const char *program_name) {
 }
 
 // SQL 문자열 하나를 lexer -> parser -> executor 순서로 처리합니다.
+/*
+ * SQL 문자열 하나를 끝까지 실행한다.
+ *
+ * 흐름:
+ * 1. 빈 입력 검사
+ * 2. lexer
+ * 3. parser
+ * 4. executor
+ * 5. 결과 메시지 출력
+ */
 static int execute_sql_text(const char *sql_text, FILE *out, char *error, size_t error_size) {
     TokenArray tokens = {0};
     ParseResult parse_result;
@@ -289,6 +324,7 @@ static int execute_sql_text(const char *sql_text, FILE *out, char *error, size_t
 }
 
 // 한 줄 입력이 파일 경로인지 SQL인지 판별해 실행합니다.
+/* REPL에서 받은 입력을 파일 경로 또는 SQL 문자열로 해석해 실행한다. */
 static int execute_argument_or_sql(const char *value, int force_file, FILE *out, FILE *err) {
     char error[256];
     char *sql_text = load_sql_from_argument(value, force_file, error, sizeof(error));
@@ -309,6 +345,12 @@ static int execute_argument_or_sql(const char *value, int force_file, FILE *out,
 }
 
 // 대화형 프롬프트를 제공해 SQL 또는 파일 경로를 반복 실행합니다.
+/*
+ * 대화형 프롬프트를 실행한다.
+ *
+ * 사용자는 한 줄씩 SQL 또는 파일 경로를 입력할 수 있고,
+ * .exit / .quit / help 같은 간단한 명령도 사용할 수 있다.
+ */
 static int run_repl(FILE *out, FILE *err) {
     char line[4096];
     int had_error = 0;
@@ -355,6 +397,7 @@ static int run_repl(FILE *out, FILE *err) {
 }
 
 // 명령줄 옵션과 표준입력을 해석해 실행할 SQL 문자열을 준비합니다.
+/* 비대화형 실행에서 CLI 인자를 해석해 최종 SQL 본문을 결정한다. */
 static char *load_noninteractive_sql(int argc, char *argv[], char *error, size_t error_size, int *show_help) {
     if (argc < 2) {
         if (stdin_is_interactive()) {
@@ -406,6 +449,14 @@ static char *load_noninteractive_sql(int argc, char *argv[], char *error, size_t
     return join_arguments_as_sql(argc, argv, 1, error, error_size);
 }
 
+/*
+ * 프로그램 시작점.
+ *
+ * 크게 보면 아래 분기만 담당한다.
+ * - REPL로 들어갈지
+ * - help만 출력할지
+ * - SQL을 한 번 실행하고 끝낼지
+ */
 int main(int argc, char *argv[]) {
     char error[256];
     char *sql_text;

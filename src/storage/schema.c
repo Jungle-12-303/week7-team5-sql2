@@ -1,4 +1,15 @@
 // schema.c는 meta 파일과 CSV 헤더를 읽어 테이블 구조를 검증한다.
+/*
+ * storage/schema.c
+ *
+ * 이 파일은 schema/<table>.meta 와 data/<table>.csv를 읽어
+ * "이 테이블이 정말 유효한가?"를 검증하는 역할을 담당한다.
+ *
+ * 쉽게 말해:
+ * - 테이블 정의 읽기
+ * - 컬럼 목록 확인
+ * - CSV 헤더와 스키마가 맞는지 검증
+ */
 #include "sqlparser/storage/schema.h"
 
 // CSV 한 줄을 컬럼 목록으로 파싱하기 위해 사용한다.
@@ -14,6 +25,7 @@
 // strcmp, strchr를 쓰기 위해 포함한다.
 #include <string.h>
 
+/* SchemaResult 실패 메시지를 공통 형식으로 채우는 헬퍼 함수다. */
 static void set_schema_error(SchemaResult *result, const char *message) {
     // 실패 플래그를 0으로 둔다.
     result->ok = 0;
@@ -21,6 +33,7 @@ static void set_schema_error(SchemaResult *result, const char *message) {
     snprintf(result->message, sizeof(result->message), "%s", message);
 }
 
+/* meta 파일의 columns=... 값을 CSV 한 줄처럼 파싱해 컬럼 리스트로 만든다. */
 static int parse_columns_value(const char *value, StringList *columns, char *message, size_t message_size) {
     // columns=id,name,age 값을 잠시 CSV처럼 파싱할 임시 리스트다.
     StringList parsed = {0};
@@ -37,6 +50,7 @@ static int parse_columns_value(const char *value, StringList *columns, char *mes
     return 1;
 }
 
+/* meta 파일 경로에서 실제 저장 파일의 basename을 추출한다. */
 static char *extract_storage_name(const char *path) {
     // 마지막 디렉터리 구분자 위치다.
     const char *filename = strrchr(path, '/');
@@ -66,6 +80,7 @@ static char *extract_storage_name(const char *path) {
     return name;
 }
 
+/* 디렉터리 안의 자식 파일 경로를 "dir/filename" 형태로 만든다. */
 static char *build_child_file_path(const char *dir, const char *filename) {
     // "dir/filename" 전체 길이를 계산한다.
     size_t length = strlen(dir) + strlen(filename) + 2;
@@ -80,6 +95,7 @@ static char *build_child_file_path(const char *dir, const char *filename) {
     return path;
 }
 
+/* 파일명이 .meta 확장자로 끝나는지 검사한다. */
 static int has_meta_extension(const char *filename) {
     // 파일명 길이를 구한다.
     size_t length = strlen(filename);
@@ -92,6 +108,10 @@ static int has_meta_extension(const char *filename) {
     return strcmp(filename + length - 5, ".meta") == 0;
 }
 
+/*
+ * 특정 meta 파일이 요청한 table=... 선언을 갖고 있는지 검사한다.
+ * alias 파일명 지원을 위해 디렉터리 전체를 탐색할 때 사용된다.
+ */
 static int file_declares_table(const char *path, const char *table_name, int *matches, char *message, size_t message_size) {
     // meta 파일을 읽을 핸들이다.
     FILE *file;
@@ -136,6 +156,15 @@ static int file_declares_table(const char *path, const char *table_name, int *ma
     return 1;
 }
 
+/*
+ * 요청한 테이블 이름에 해당하는 schema meta 파일 경로를 찾는다.
+ *
+ * 1순위:
+ * - schema_dir/table_name.meta
+ *
+ * 없으면:
+ * - schema_dir 안의 모든 .meta를 열어 table=... 선언을 확인
+ */
 static char *find_schema_path(const char *schema_dir, const char *table_name, char *message, size_t message_size) {
     // 요청한 테이블명 기준 기본 meta 경로다.
     char *path = build_path(schema_dir, table_name, ".meta");
@@ -203,6 +232,7 @@ static char *find_schema_path(const char *schema_dir, const char *table_name, ch
     return NULL;
 }
 
+/* CSV 헤더가 schema의 컬럼 수와 순서를 정확히 따르는지 검사한다. */
 static int validate_csv_header(const char *data_dir, const char *storage_name, const Schema *schema, char *message, size_t message_size) {
     // data/<storage>.csv 경로다.
     char *path;
@@ -270,6 +300,9 @@ static int validate_csv_header(const char *data_dir, const char *storage_name, c
     return 1;
 }
 
+/*
+ * 테이블 하나의 schema를 로딩하고, 연결된 CSV까지 함께 검증하는 storage 진입점이다.
+ */
 SchemaResult load_schema(const char *schema_dir, const char *data_dir, const char *table_name) {
     // 반환할 최종 결과 구조체다.
     SchemaResult result = {0};
@@ -386,6 +419,7 @@ SchemaResult load_schema(const char *schema_dir, const char *data_dir, const cha
     return result;
 }
 
+/* 특정 컬럼명이 schema에서 몇 번째에 있는지 찾는다. */
 int schema_find_column(const Schema *schema, const char *column_name) {
     if (schema == NULL || column_name == NULL) {
         return -1;
@@ -394,10 +428,12 @@ int schema_find_column(const Schema *schema, const char *column_name) {
     return string_list_index_of(&schema->columns, column_name);
 }
 
+/* id 컬럼의 위치를 찾는 편의 함수다. */
 int schema_find_id_column(const Schema *schema) {
     return schema_find_column(schema, "id");
 }
 
+/* Schema 구조체가 소유한 문자열과 컬럼 리스트 메모리를 정리한다. */
 void free_schema(Schema *schema) {
     // 테이블 이름 문자열을 해제한다.
     free(schema->table_name);

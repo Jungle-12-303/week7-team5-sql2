@@ -1,9 +1,16 @@
 // AST 구조체의 동적 메모리를 해제하는 구현 파일이다.
+/*
+ * sql/ast.c
+ *
+ * parser가 만든 Statement 구조체는 내부에 동적 메모리를 가진다.
+ * 이 파일은 그 메모리를 문장 종류에 맞춰 정리하는 역할만 담당한다.
+ */
 #include "sqlparser/sql/ast.h"
 
 // free 함수를 사용하기 위해 포함한다.
 #include <stdlib.h>
 
+/* Statement 내부 문자열과 리스트 메모리를 한 번에 해제한다. */
 void free_statement(Statement *statement) {
     // INSERT 문장이라면 INSERT 전용 필드들을 해제한다.
     if (statement->type == STATEMENT_INSERT) {

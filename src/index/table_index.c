@@ -1,3 +1,14 @@
+/*
+ * index/table_index.c
+ *
+ * 이 파일은 "테이블별 인덱스 운영"을 담당한다.
+ * B+ 트리 자체는 bptree.c가 구현하고,
+ * 여기서는 각 테이블마다:
+ * - 인덱스가 이미 메모리에 있는지
+ * - 아직 없으면 CSV에서 재구성해야 하는지
+ * - 다음 자동 id가 무엇인지
+ * 를 관리한다.
+ */
 #include "sqlparser/index/table_index.h"
 
 #include "sqlparser/common/util.h"
@@ -30,6 +41,7 @@ typedef struct {
 static TableIndexRegistry registry = {0};
 static int force_next_register_failure = 0;
 
+/* 레지스트리에서 특정 테이블 이름의 인덱스 엔트리를 찾는다. */
 static TableIndex *find_table_index(const char *table_name) {
     int index;
 
@@ -42,6 +54,7 @@ static TableIndex *find_table_index(const char *table_name) {
     return NULL;
 }
 
+/* 테이블 인덱스 엔트리를 찾고, 없으면 새로 생성한다. */
 static TableIndex *get_or_create_table_index(const char *table_name, char *message, size_t message_size) {
     TableIndex *existing = find_table_index(table_name);
     TableIndex *new_items;
@@ -78,6 +91,15 @@ static TableIndex *get_or_create_table_index(const char *table_name, char *messa
     return entry;
 }
 
+/*
+ * CSV 한 행을 읽을 때마다 호출되는 재구성 콜백이다.
+ *
+ * 각 행에서:
+ * - id를 읽고
+ * - 정수인지 검사하고
+ * - B+ 트리에 삽입하고
+ * - max_id를 갱신한다.
+ */
 static int rebuild_row(const StringList *fields, long row_offset, void *context, char *error, size_t error_size) {
     RebuildContext *rebuild = (RebuildContext *)context;
     int id_value;
@@ -103,6 +125,12 @@ static int rebuild_row(const StringList *fields, long row_offset, void *context,
     return 1;
 }
 
+/*
+ * 특정 테이블 인덱스가 메모리에 준비돼 있는지 보장한다.
+ *
+ * 이미 있으면 그대로 사용하고,
+ * 아직 없으면 CSV를 스캔해 B+ 트리를 다시 만든다.
+ */
 static int ensure_loaded(const Schema *schema, const char *data_dir, TableIndex **out_index, char *message, size_t message_size) {
     TableIndex *entry;
     RebuildContext rebuild;
@@ -142,6 +170,7 @@ static int ensure_loaded(const Schema *schema, const char *data_dir, TableIndex 
     return 1;
 }
 
+/* 모든 테이블 인덱스를 메모리에서 제거하고 레지스트리를 초기 상태로 되돌린다. */
 void table_index_registry_reset(void) {
     int index;
 
@@ -157,6 +186,7 @@ void table_index_registry_reset(void) {
     force_next_register_failure = 0;
 }
 
+/* 특정 테이블 인덱스를 "다시 재구성 필요" 상태로 무효화한다. */
 void table_index_invalidate(const char *table_name) {
     TableIndex *entry = find_table_index(table_name);
     if (entry == NULL) {
@@ -169,11 +199,13 @@ void table_index_invalidate(const char *table_name) {
     entry->next_id = 1;
 }
 
+/* 특정 테이블 인덱스가 현재 메모리에 로드돼 있는지 확인한다. */
 int table_index_is_loaded(const char *table_name) {
     TableIndex *entry = find_table_index(table_name);
     return entry != NULL && entry->loaded;
 }
 
+/* 자동 증가 id에 사용할 next_id 값을 구한다. */
 int table_index_get_next_id(const Schema *schema, const char *data_dir, int *next_id, char *message, size_t message_size) {
     TableIndex *entry;
 
@@ -185,6 +217,7 @@ int table_index_get_next_id(const Schema *schema, const char *data_dir, int *nex
     return 1;
 }
 
+/* CSV에 새 행이 추가된 뒤, 그 id와 오프셋을 메모리 인덱스에 등록한다. */
 int table_index_register_row(const Schema *schema, const char *data_dir, int id, long row_offset, char *message, size_t message_size) {
     TableIndex *entry;
 
@@ -209,6 +242,7 @@ int table_index_register_row(const Schema *schema, const char *data_dir, int id,
     return 1;
 }
 
+/* id 하나를 받아 인덱스에서 해당 CSV 오프셋을 찾는다. */
 TableIndexLookupResult table_index_find_row(const Schema *schema, const char *data_dir, int id) {
     TableIndexLookupResult result = {0};
     TableIndex *entry;
@@ -222,6 +256,7 @@ TableIndexLookupResult table_index_find_row(const Schema *schema, const char *da
     return result;
 }
 
+/* 테스트용: 다음 인덱스 등록 한 번을 강제로 실패시키도록 설정한다. */
 void table_index_force_next_register_failure(void) {
     force_next_register_failure = 1;
 }

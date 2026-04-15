@@ -1,3 +1,15 @@
+/*
+ * execution/executor.c
+ *
+ * executor는 parser가 만든 AST를 실제 동작으로 연결하는 계층이다.
+ * 초심자 관점에서는 "SQL 문장의 의미를 실제 파일 작업으로 번역하는 오케스트레이터"다.
+ *
+ * 이 파일의 핵심 책임:
+ * - INSERT / SELECT 분기
+ * - INSERT 시 자동 id 생성 흐름 조정
+ * - WHERE id일 때 인덱스 경로 선택
+ * - 일반 SELECT / 일반 WHERE일 때 기존 CSV 스캔 경로 유지
+ */
 #include "sqlparser/execution/executor.h"
 
 #include "sqlparser/common/util.h"
@@ -9,21 +21,25 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* 실행 실패 결과를 공통 형식으로 채우는 작은 헬퍼 함수다. */
 static void set_exec_error(ExecResult *result, const char *message) {
     result->ok = 0;
     snprintf(result->message, sizeof(result->message), "%s", message);
 }
 
+/* CSV 한 칸 값에 줄바꿈이 들어 있는지 검사한다. */
 static int contains_newline(const char *value) {
     return strchr(value, '\n') != NULL || strchr(value, '\r') != NULL;
 }
 
+/* 자동 생성한 정수 id를 문자열로 바꿔 INSERT 행에 넣기 위한 함수다. */
 static char *copy_int_string(int value) {
     char buffer[32];
     snprintf(buffer, sizeof(buffer), "%d", value);
     return copy_string(buffer);
 }
 
+/* INSERT에 들어온 컬럼 목록과 값 목록이 스키마 기준으로 유효한지 검사한다. */
 static int validate_insert_columns(const InsertStatement *statement, const Schema *schema, char *message, size_t message_size) {
     int index;
 
@@ -47,6 +63,14 @@ static int validate_insert_columns(const InsertStatement *statement, const Schem
     return 1;
 }
 
+/*
+ * 사용자가 준 INSERT 입력을 스키마 순서에 맞는 "완성 행"으로 바꾼다.
+ *
+ * 예:
+ * - 사용자는 name만 넣을 수 있다.
+ * - 누락 컬럼은 빈 문자열로 채운다.
+ * - id는 시스템이 계산한 next_id로 덮어쓴다.
+ */
 static int build_insert_row(const InsertStatement *statement, const Schema *schema, int next_id, StringList *row_values, char *message, size_t message_size) {
     int *assigned = NULL;
     int schema_index;
@@ -114,6 +138,17 @@ static int build_insert_row(const InsertStatement *statement, const Schema *sche
     return 1;
 }
 
+/*
+ * INSERT 실행의 전체 흐름을 담당한다.
+ *
+ * 순서:
+ * 1. schema 로딩
+ * 2. 컬럼/값 검증
+ * 3. next_id 계산
+ * 4. CSV에 쓸 행 구성
+ * 5. CSV append
+ * 6. 인덱스 등록
+ */
 static ExecResult execute_insert(const InsertStatement *statement, const char *schema_dir, const char *data_dir) {
     ExecResult result = {0};
     SchemaResult schema_result;
@@ -163,6 +198,7 @@ static ExecResult execute_insert(const InsertStatement *statement, const char *s
     return result;
 }
 
+/* SELECT 결과에서 어떤 컬럼을 어떤 순서로 출력할지 계산한다. */
 static int build_select_indexes(const SelectStatement *statement, const Schema *schema, StringList *selected_headers, int *selected_indexes, char *message, size_t message_size) {
     int index;
     int schema_index;
@@ -196,6 +232,7 @@ static int build_select_indexes(const SelectStatement *statement, const Schema *
     return statement->columns.count;
 }
 
+/* WHERE 절에 사용된 컬럼이 스키마에서 몇 번째인지 찾는다. */
 static int resolve_where_index(const SelectStatement *statement, const Schema *schema, int *where_index, char *message, size_t message_size) {
     if (!statement->has_where) {
         *where_index = -1;
@@ -211,6 +248,7 @@ static int resolve_where_index(const SelectStatement *statement, const Schema *s
     return 1;
 }
 
+/* 현재 CSV 행이 WHERE 조건과 일치하는지 검사한다. */
 static int row_matches_where(const SelectStatement *statement, const StringList *fields, int where_index) {
     if (!statement->has_where) {
         return 1;
@@ -219,6 +257,7 @@ static int row_matches_where(const SelectStatement *statement, const StringList 
     return strcmp(fields->items[where_index], statement->where_value) == 0;
 }
 
+/* 선택된 컬럼만 골라 한 줄 결과로 출력한다. */
 static void print_selected_row(FILE *out, const StringList *fields, const int *selected_indexes, int selected_count) {
     int index;
 
@@ -231,6 +270,7 @@ static void print_selected_row(FILE *out, const StringList *fields, const int *s
     fprintf(out, "\n");
 }
 
+/* 결과 표의 헤더 행을 출력한다. */
 static void print_header_row(FILE *out, const StringList *headers) {
     int index;
 
@@ -243,6 +283,14 @@ static void print_header_row(FILE *out, const StringList *headers) {
     fprintf(out, "\n");
 }
 
+/*
+ * WHERE id = ... 전용 인덱스 조회 경로를 수행한다.
+ *
+ * 일반 SELECT와 달리:
+ * - id 값을 정수로 검증하고
+ * - B+ 트리에서 오프셋을 찾고
+ * - 해당 행 하나만 읽는다.
+ */
 static int execute_index_select(const SelectStatement *statement, const Schema *schema, const char *data_dir, FILE *out, const StringList *headers, const int *selected_indexes, int selected_count, ExecResult *result) {
     TableIndexLookupResult lookup;
     StorageReadResult read_result;
@@ -288,6 +336,13 @@ static int execute_index_select(const SelectStatement *statement, const Schema *
     return 1;
 }
 
+/*
+ * SELECT 실행의 전체 흐름을 담당한다.
+ *
+ * 여기서 가장 중요한 분기:
+ * - WHERE id 이면 execute_index_select
+ * - 아니면 CSV 전체 스캔
+ */
 static ExecResult execute_select(const SelectStatement *statement, const char *schema_dir, const char *data_dir, FILE *out) {
     ExecResult result = {0};
     SchemaResult schema_result;
@@ -416,6 +471,7 @@ static ExecResult execute_select(const SelectStatement *statement, const char *s
     return result;
 }
 
+/* Statement 종류에 따라 INSERT 또는 SELECT 실행 함수로 분기하는 진입점이다. */
 ExecResult execute_statement(const Statement *statement, const char *schema_dir, const char *data_dir, FILE *out) {
     if (statement->type == STATEMENT_INSERT) {
         return execute_insert(&statement->as.insert_statement, schema_dir, data_dir);
@@ -424,6 +480,7 @@ ExecResult execute_statement(const Statement *statement, const char *schema_dir,
     return execute_select(&statement->as.select_statement, schema_dir, data_dir, out);
 }
 
+/* 실행 계층이 내부적으로 쓰는 런타임 상태(현재는 인덱스 레지스트리)를 정리한다. */
 void execution_runtime_reset(void) {
     table_index_registry_reset();
 }

@@ -1,4 +1,10 @@
 // parser는 lexer가 만든 토큰 목록을 SQL 의미 구조로 해석한다.
+/*
+ * sql/parser.c
+ *
+ * parser는 lexer가 만든 토큰 배열을 읽어 INSERT/SELECT AST 구조로 바꾼다.
+ * 즉, "토큰이 어떤 SQL 문장을 의미하는가"를 해석하는 단계다.
+ */
 #include "sqlparser/sql/parser.h"
 
 // 에러 메시지 생성을 위해 포함한다.
@@ -19,6 +25,7 @@ typedef struct {
 
 static const Token *current_token(const ParserState *state);
 
+/* TokenType enum 값을 에러 메시지용 문자열로 변환한다. */
 static const char *token_type_name(TokenType type) {
     switch (type) {
         case TOKEN_IDENTIFIER:
@@ -46,6 +53,7 @@ static const char *token_type_name(TokenType type) {
     return "UNKNOWN";
 }
 
+/* 현재 토큰을 사람이 읽기 쉬운 설명 문자열로 만든다. */
 static void describe_token(const Token *token, char *buffer, size_t buffer_size) {
     if (token->type == TOKEN_END) {
         snprintf(buffer, buffer_size, "EOF at position %d", token->position);
@@ -60,6 +68,7 @@ static void describe_token(const Token *token, char *buffer, size_t buffer_size)
     snprintf(buffer, buffer_size, "%s at position %d", token_type_name(token->type), token->position);
 }
 
+/* 기대한 토큰과 실제 토큰 차이를 자세한 파서 오류 메시지로 만든다. */
 static void set_expected_token_error(ParserState *state, const char *expected) {
     char token_description[128];
 
@@ -72,11 +81,13 @@ static void set_expected_token_error(ParserState *state, const char *expected) {
     snprintf(state->result->message, sizeof(state->result->message), "expected %s, got %s", expected, token_description);
 }
 
+/* 현재 읽고 있는 토큰 하나를 반환한다. */
 static const Token *current_token(const ParserState *state) {
     // 현재 위치의 토큰 주소를 바로 반환한다.
     return &state->tokens->items[state->index];
 }
 
+/* 현재 토큰 타입이 기대값과 같으면 소비하고, 아니면 그대로 둔다. */
 static int match_type(ParserState *state, TokenType type) {
     // 지금 보고 있는 토큰 종류가 기대한 종류와 같으면 소비한다.
     if (current_token(state)->type == type) {
@@ -88,6 +99,7 @@ static int match_type(ParserState *state, TokenType type) {
     return 0;
 }
 
+/* 특정 타입 토큰이 반드시 와야 하는 위치에서 사용하는 검증 함수다. */
 static int expect_type(ParserState *state, TokenType type, const char *message) {
     // 기대한 토큰이 맞으면 통과시킨다.
     if (!match_type(state, type)) {
@@ -99,6 +111,7 @@ static int expect_type(ParserState *state, TokenType type, const char *message) 
     return 1;
 }
 
+/* 현재 토큰이 INSERT, SELECT, FROM 같은 특정 키워드인지 확인한다. */
 static int expect_keyword(ParserState *state, const char *keyword) {
     // 현재 토큰을 잠시 읽기 쉽게 꺼내 둔다.
     const Token *token = current_token(state);
@@ -116,6 +129,7 @@ static int expect_keyword(ParserState *state, const char *keyword) {
     return 1;
 }
 
+/* 테이블명 또는 컬럼명처럼 식별자 하나를 읽는다. */
 static int parse_identifier(ParserState *state, char **value) {
     // 현재 토큰을 읽는다.
     const Token *token = current_token(state);
@@ -138,6 +152,7 @@ static int parse_identifier(ParserState *state, char **value) {
     return 1;
 }
 
+/* 쉼표로 구분된 식별자 목록을 읽어 StringList에 담는다. */
 static int parse_identifier_list(ParserState *state, StringList *list) {
     // 식별자 하나를 임시로 담을 포인터다.
     char *identifier = NULL;
@@ -174,6 +189,7 @@ static int parse_identifier_list(ParserState *state, StringList *list) {
     return 1;
 }
 
+/* VALUES (...) 안에 들어가는 값 목록을 순서대로 읽는다. */
 static int parse_value_list(ParserState *state, StringList *list) {
     // 현재 값을 가리키는 토큰 포인터다.
     const Token *token;
@@ -212,6 +228,7 @@ static int parse_value_list(ParserState *state, StringList *list) {
     return 1;
 }
 
+/* WHERE 절 오른쪽에 오는 비교값 하나를 읽는다. */
 static int parse_condition_value(ParserState *state, char **value) {
     const Token *token = current_token(state);
 
@@ -229,6 +246,7 @@ static int parse_condition_value(ParserState *state, char **value) {
     state->index++;
     return 1;
 }
+/* INSERT 문장을 AST의 InsertStatement 형태로 채운다. */
 static int parse_insert(ParserState *state, Statement *statement) {
     // union 안의 INSERT 전용 영역을 읽기 쉽게 별칭으로 잡는다.
     InsertStatement *insert_statement = &statement->as.insert_statement;
@@ -278,6 +296,7 @@ static int parse_insert(ParserState *state, Statement *statement) {
     return 1;
 }
 
+/* SELECT 문장을 AST의 SelectStatement 형태로 채운다. */
 static int parse_select(ParserState *state, Statement *statement) {
     // union 안의 SELECT 전용 영역을 읽기 쉽게 별칭으로 잡는다.
     SelectStatement *select_statement = &statement->as.select_statement;
@@ -325,6 +344,7 @@ static int parse_select(ParserState *state, Statement *statement) {
     return 1;
 }
 
+/* 토큰 배열 하나를 문장 하나로 완성하는 parser의 진입점이다. */
 ParseResult parse_statement(const TokenArray *tokens) {
     // 반환할 결과 구조체다. {0}으로 초기화해 ok=0, 포인터=NULL 상태로 시작한다.
     ParseResult result = {0};

@@ -1,4 +1,10 @@
 // lexer는 SQL 원문을 토큰 목록으로 바꿔 주는 단계다.
+/*
+ * sql/lexer.c
+ *
+ * lexer는 SQL 원문을 parser가 처리할 수 있는 토큰 배열로 바꾸는 단계다.
+ * 글자 단위 입력을 의미 있는 조각(키워드, 식별자, 문자열, 기호)으로 분리한다고 이해하면 된다.
+ */
 #include "sqlparser/sql/lexer.h"
 
 // 문자열 복사 같은 유틸 함수를 사용한다.
@@ -13,16 +19,19 @@
 // memcpy를 쓰기 위해 포함한다.
 #include <string.h>
 
+/* 식별자의 첫 글자가 될 수 있는 문자인지 검사한다. */
 static int is_identifier_start(unsigned char value) {
     // ASCII 영문, 언더스코어, 숫자 외에도 UTF-8 바이트를 식별자 시작으로 허용한다.
     return isalpha(value) || value == '_' || isdigit(value) || value >= 0x80;
 }
 
+/* 식별자의 두 번째 글자 이후에 올 수 있는 문자인지 검사한다. */
 static int is_identifier_continue(unsigned char value) {
     // 식별자 중간 문자도 시작 문자와 같은 규칙으로 읽는다.
     return isalnum(value) || value == '_' || value >= 0x80;
 }
 
+/* TokenArray 동적 배열에 토큰 하나를 추가한다. */
 static int push_token(TokenArray *tokens, TokenType type, const char *text, int position) {
     // 배열이 부족할 때 새로 잡을 크기다.
     int new_capacity;
@@ -59,6 +68,7 @@ static int push_token(TokenArray *tokens, TokenType type, const char *text, int 
     return 1;
 }
 
+/* 한 글자짜리 기호 토큰을 쉽게 추가하는 래퍼 함수다. */
 static int push_simple_token(TokenArray *tokens, TokenType type, char value, int position) {
     // 한 글자 토큰을 C 문자열 형태로 만들기 위한 작은 버퍼다.
     char text[2];
@@ -71,6 +81,7 @@ static int push_simple_token(TokenArray *tokens, TokenType type, char value, int
     return push_token(tokens, type, text, position);
 }
 
+/* 식별자나 숫자처럼 연속된 문자 묶음을 읽어 토큰 하나로 만든다. */
 static int lex_word(const char *input, int *index, TokenArray *tokens) {
     // 이 단어가 시작된 위치다.
     int start = *index;
@@ -107,6 +118,7 @@ static int lex_word(const char *input, int *index, TokenArray *tokens) {
     return ok;
 }
 
+/* 작은따옴표 문자열 리터럴을 읽어 TOKEN_STRING으로 만든다. */
 static int lex_string(const char *input, int *index, TokenArray *tokens, char *error, size_t error_size) {
     // 문자열 리터럴이 시작된 원래 위치다.
     int start = *index;
@@ -189,6 +201,7 @@ static int lex_string(const char *input, int *index, TokenArray *tokens, char *e
     return 1;
 }
 
+/* SQL 원문 전체를 순회하며 토큰 배열을 완성하는 lexer 진입점이다. */
 int lex_sql(const char *input, TokenArray *tokens, char *error, size_t error_size) {
     // 원본 SQL 문자열을 왼쪽부터 훑어 갈 인덱스다.
     int index;
@@ -294,6 +307,7 @@ int lex_sql(const char *input, TokenArray *tokens, char *error, size_t error_siz
     return 1;
 }
 
+/* lexer가 만든 토큰 배열과 내부 문자열 메모리를 모두 정리한다. */
 void free_tokens(TokenArray *tokens) {
     // 토큰 배열 안의 각 문자열을 순회할 인덱스다.
     int index;
