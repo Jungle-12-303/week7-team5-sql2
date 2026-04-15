@@ -88,7 +88,6 @@ CSV 기반 저장소는 구현이 단순하지만, 원하는 레코드를 찾으
 - SQL 파일 실행
 - SQL 문자열 직접 실행
 - REPL 실행
-- Docker/Linux 기준 빌드와 테스트
 - 별도 성능 비교 바이너리
 
 ## 현재 제외 범위
@@ -179,50 +178,6 @@ SELECT * FROM 학생;
 SELECT id, name FROM 학생;
 SELECT name, age FROM 학생 WHERE department = '컴퓨터공학과';
 SELECT * FROM 학생 WHERE id = 1000;
-```
-
-## 빌드
-
-Linux 또는 Docker 기준:
-
-```bash
-make all
-```
-
-테스트 바이너리:
-
-```bash
-make test
-```
-
-성능 비교 바이너리:
-
-```bash
-make benchmark
-```
-
-- `make` 또는 `make all`은 기본 CLI 바이너리 `sqlparser`를 빌드합니다.
-- `benchmark_runner`까지 최신 코드로 다시 만들려면 `make benchmark`를 별도로 실행해야 합니다.
-- Windows 환경에 따라 `make` 대신 `mingw32-make`를 사용할 수 있습니다.
-
-## Docker 사용 예시
-
-이미지 빌드:
-
-```bash
-docker build -t jungle-sql-processor-test .
-```
-
-CLI 실행:
-
-```bash
-docker run --rm -it -v "C:/developer_folder/jungle-sql-processor-2nd:/workspace" -w /workspace jungle-sql-processor-test ./build/bin/sqlparser
-```
-
-테스트 실행:
-
-```bash
-docker run --rm -v "C:/developer_folder/jungle-sql-processor-2nd:/workspace" -w /workspace jungle-sql-processor-test bash scripts/docker-test.sh
 ```
 
 ## 조회 성능 비교
