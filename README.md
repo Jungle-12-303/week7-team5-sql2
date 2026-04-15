@@ -33,6 +33,10 @@
 
 ![Week 7 Select Id Flow](docs/diagrams/week7-select-id-flow.svg)
 
+### B+Tree
+
+![Week 7 B+Tree Structure](docs/diagrams/week7-bptree-structure.svg)
+
 ## 프로젝트가 푸는 문제
 
 CSV 기반 저장소는 구현이 단순하지만, 원하는 레코드를 찾으려면 보통 처음부터 끝까지 읽어야 합니다.
