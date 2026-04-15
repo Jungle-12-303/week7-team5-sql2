@@ -1,163 +1,97 @@
 # SQL Processor Week 7
 
-7주차 5조 SQL 처리기 프로젝트입니다.
+파일 기반 SQL 처리기에 숨은 내부 PK `__internal_id` 자동 부여와 메모리 기반 B+ 트리 인덱스를 붙여, `WHERE id = ...` 조회를 최적화하는 7주차 프로젝트입니다.
 
-이번 주차의 핵심 목표는 **CSV 기반 SQL 처리기의 조회 성능 개선**입니다. 기존 6주차 SQL 처리기는 데이터를 CSV 파일에 저장하고, 조회 시 파일을 처음부터 끝까지 읽는 선형 탐색 방식을 사용했습니다. 데이터가 많아질수록 특정 레코드를 찾는 비용이 계속 커지는 문제가 있었고, 이를 해결하기 위해 이번 주차에서는 **B+ 트리 기반 인덱스 구조**를 도입했습니다.
+기준 문서는 [docs/architecture.md](/C:/developer_folder/jungle-sql-processor-2nd/docs/architecture.md)와 [docs/requirements.md](/C:/developer_folder/jungle-sql-processor-2nd/docs/requirements.md)입니다. 구현 설명은 이 README보다 두 문서를 우선합니다.
 
-## 발표 요약
+## 발표용 요약
 
 ### 문제 정의
 
-6주차 구조에서는 `SELECT ... WHERE ...` 조회가 CSV 전체를 순차적으로 탐색합니다.
+6주차 SQL 처리기는 CSV를 선형 탐색하므로, 데이터가 커질수록 특정 레코드를 찾는 비용이 계속 커집니다.
 
-예를 들어 100만 건의 데이터가 있을 때:
+7주차 목표는 아래 3가지였습니다.
 
-- `WHERE name = 'name_100000'`은 CSV를 순서대로 읽으며 비교합니다.
-- `WHERE id = 100000`도 인덱스가 없다면 같은 방식으로 선형 탐색해야 합니다.
+- `INSERT` 시 레코드에 숨은 내부 PK `__internal_id`를 자동 부여한다.
+- `__internal_id`를 키로 사용하는 메모리 기반 B+ 트리를 만든다.
+- `WHERE id = <number>` 조회는 인덱스를 사용하고, 다른 컬럼 조건은 기존 선형 탐색을 유지한다.
 
-이번 구현에서는 `id` 기준 조회만이라도 빠르게 처리하기 위해, 실행 중 메모리에 B+ 트리 인덱스를 구성합니다.
+### 이번 주 핵심 구현
 
-### 핵심 구현
+- 기존 `INSERT`, `SELECT`, `SELECT ... WHERE` 흐름 유지
+- 숨은 내부 PK `__internal_id` 자동 부여
+- 테이블별 메모리 B+ 트리 인덱스 유지
+- `WHERE id = <number>` 인덱스 조회
+- CSV 기준 인덱스 재구성
+- 1,000,000건 이상 삽입 가능한 벤치마크 진입점 제공
+- 단위 테스트 및 기능 테스트 작성
 
-1. 기존 `INSERT`, `SELECT`, `WHERE` 실행 흐름 유지
-2. 숨은 내부 PK `__internal_id` 자동 부여
-3. 테이블별 메모리 B+ 트리 인덱스 유지
-4. `WHERE id = <number>` 인덱스 조회
-5. CSV 기준 인덱스 재구성
-6. 100만 건 이상 데이터 삽입 및 조회 비교용 벤치마크 진입점 구현
+### 발표에서 보여줄 차별점
 
-## 전체 구조
+- 기존 SQL 처리기를 버리지 않고 그대로 확장했다는 점
+- 일반 조회와 인덱스 조회가 코드 경로에서 명확히 분리된다는 점
+- 테스트와 벤치마크를 함께 준비해 결과물뿐 아니라 검증 과정도 보여줄 수 있다는 점
 
-실제 데이터는 기존과 동일하게 CSV 파일에 저장합니다. 대신 프로그램 실행 중에는 CSV를 읽어 메모리 상에 B+ 트리 인덱스를 구성합니다.
+## 시각 자료
 
-```text
-data/student.csv
-        |
-        | CSV 선형 스캔
-        v
-메모리 B+ Tree
-internal_id -> CSV row_offset
-        |
-        | WHERE id 조회
-        v
-fseek(row_offset) 후 해당 행만 읽기
-```
+### 1. 전체 구조
 
-즉, B+ 트리에는 CSV row 전체가 아니라 다음 매핑만 저장됩니다.
+![Week 7 Overall Flow](docs/diagrams/week7-overall-flow.svg)
 
-```text
-1      -> 첫 번째 데이터 행의 파일 offset
-2      -> 두 번째 데이터 행의 파일 offset
-100000 -> 100000번째 데이터 행의 파일 offset
-```
+### 2. INSERT 시 자동 ID 부여와 인덱스 등록
 
-인덱스는 메모리 구조이므로 프로그램이 종료되면 사라집니다. 다음 실행에서 `WHERE id = ...` 조회나 `INSERT`가 발생하면 CSV를 기준으로 다시 재구성합니다.
+![Week 7 Insert Flow](docs/diagrams/week7-insert-index-flow.svg)
 
-## INSERT 흐름
+### 3. `WHERE id = ...` 조회 시 인덱스 사용
 
-INSERT 시 사용자는 `id`를 직접 넣지 않습니다.
+![Week 7 Select Id Flow](docs/diagrams/week7-select-id-flow.svg)
 
-```sql
-INSERT INTO student (department, student_number, name, age)
-VALUES ('경제학과', '2026005', '김금융', 21);
-```
+## 프로젝트가 푸는 문제
 
-실행 흐름은 다음과 같습니다.
+CSV 기반 저장소는 구현이 단순하지만, 원하는 레코드를 찾으려면 보통 처음부터 끝까지 읽어야 합니다.
 
-```text
-1. schema/student.meta 로딩
-2. INSERT 컬럼/값 검증
-3. 다음 내부 id 계산
-4. data/student.csv 끝에 새 행 append
-5. append된 행의 시작 offset 획득
-6. 메모리 B+ 트리에 internal_id -> row_offset 등록
-```
+예를 들어 `student.csv`에 1,000,000건이 들어 있을 때:
 
-CSV에는 사용자 컬럼만 저장됩니다. 내부 id는 CSV 컬럼으로 저장하지 않고, 행 순서를 기준으로 계산합니다.
+- `WHERE name = '김민수'`는 선형 탐색이 필요합니다.
+- `WHERE id = 500000`도 인덱스가 없으면 같은 선형 탐색입니다.
 
-## SELECT 흐름
+이번 구현에서는 `id` 기준 조회만이라도 빠르게 만들기 위해 B+ 트리를 붙였습니다.
 
-### 일반 WHERE 조회
+## 핵심 아이디어
 
-```sql
-SELECT id, department, student_number, name, age
-FROM student
-WHERE name = '김금융';
-```
+### 1. CSV는 계속 영속 저장의 기준이다
 
-`name` 컬럼에는 인덱스가 없으므로 기존처럼 CSV를 처음부터 끝까지 읽으며 조건을 비교합니다.
+- 실제 데이터는 계속 `data/*.csv`에 저장합니다.
+- 인덱스는 메모리 구조이므로, 필요하면 CSV를 다시 읽어 재구성합니다.
 
-```text
-CSV open
--> 헤더 읽기
--> 데이터 행을 순서대로 읽기
--> name 값 비교
--> 일치하는 행 출력
-```
+### 2. `id`는 사용자 컬럼이 아니라 시스템 예약 키다
 
-### id 인덱스 조회
+- 사용자 스키마와 CSV에는 일반 컬럼만 저장합니다.
+- 시스템은 각 행에 대해 숨은 내부 PK `__internal_id`를 계산합니다.
+- SQL 문법에서는 `WHERE id = ...`가 이 내부 키를 가리킵니다.
 
-```sql
-SELECT id, department, student_number, name, age
-FROM student
-WHERE id = 101014;
-```
+### 3. `WHERE id = ...`만 인덱스를 탄다
 
-`WHERE id = ...`는 특별히 B+ 트리 인덱스 경로를 사용합니다.
+- `WHERE id = 1000`은 B+ 트리로 찾습니다.
+- `WHERE department = '컴퓨터공학과'`는 기존 CSV 선형 탐색을 유지합니다.
 
-```text
-B+ 트리에서 id 검색
--> row_offset 획득
--> CSV 파일에서 fseek(row_offset)
--> 해당 행 한 줄만 읽기
-```
+이렇게 해야 기존 구조를 크게 깨지 않고 7주차 요구사항에 정확히 맞출 수 있습니다.
 
-그래서 같은 데이터셋에서 일반 컬럼 조회보다 훨씬 빠르게 동작합니다.
-
-## B+ 트리 구현
-
-B+ 트리 구현은 `src/index/bptree.c`에 있습니다.
-
-현재 노드 최대 key 수는 학습과 테스트를 위해 작게 설정되어 있습니다.
-
-```c
-#define BPTREE_MAX_KEYS 3
-```
-
-즉 한 노드는 정상 상태에서 최대 3개의 key를 가집니다. 삽입 후 key가 4개가 되면 overflow로 판단하고 split합니다.
-
-리프 노드는 다음 정보를 가집니다.
-
-```text
-keys   = internal_id
-values = CSV row_offset
-next   = 다음 리프 노드 포인터
-```
-
-리프 노드 연결 리스트도 구현되어 있습니다.
-
-```text
-[1, 2] -> [3, 4] -> [5, 6]
-```
-
-다만 현재 SQL 기능은 `WHERE id = <number>` 단건 조회만 지원하므로, 리프 연결 리스트를 활용한 범위 검색은 아직 구현하지 않았습니다.
-
-## 현재 구현 범위와 한계
-
-지원하는 기능:
+## 지원 기능
 
 - `INSERT`
 - `SELECT *`
 - `SELECT column1, column2`
 - `SELECT ... WHERE column = value`
 - `WHERE id = <number>` 인덱스 조회
-- `SELECT id, ...` 내부 id 출력
+- `id` 자동 부여
 - SQL 파일 실행
 - SQL 문자열 직접 실행
 - REPL 실행
-- 벤치마크 실행
+- Docker/Linux 기준 빌드와 테스트
+- 별도 벤치마크 바이너리
 
-아직 지원하지 않는 기능:
+## 현재 제외 범위
 
 - `UPDATE`
 - `DELETE`
@@ -165,139 +99,170 @@ next   = 다음 리프 노드 포인터
 - `ORDER BY`
 - `GROUP BY`
 - 복합 `WHERE`
-- `BETWEEN`, `>`, `<` 같은 범위 검색
+- 범위 검색 최적화
 - 디스크 기반 B+ 트리
-- 버퍼 풀 또는 파일 캐시
-- 인덱스 파일 영속화
 
-현재 B+ 트리는 실제 DB의 페이지 기반 고 fanout B+ 트리라기보다는, `id -> row_offset` 매핑을 위한 **메모리 기반 학습용 B+ 트리**입니다.
+## 디렉터리 구조
+
+- `src/app`
+  CLI 입력, 파일 입력, REPL 시작점
+- `src/sql`
+  lexer, parser, AST
+- `src/execution`
+  `INSERT`/`SELECT` 실행 분기, `id` 자동 생성, 인덱스 경로 선택
+- `src/storage`
+  스키마 로딩, CSV 검증, CSV 읽기/쓰기, CSV 순회
+- `src/index`
+  B+ 트리와 테이블별 인덱스 관리
+- `src/benchmark`
+  대량 삽입 및 조회 성능 측정용 별도 진입점
+- `tests`
+  단위/기능 테스트
+- `docs`
+  요구사항, 아키텍처, 테스트 문서
+- `learning-docs`
+  초심자용 학습 문서
+
+## 데이터 형식
+
+테이블은 아래 두 파일이 모두 있어야 합니다.
+
+- `schema/<storage_name>.meta`
+- `data/<storage_name>.csv`
+
+예시:
+
+```txt
+table=학생
+columns=department,student_number,name,age
+```
+
+같은 테이블의 CSV 첫 줄은 아래와 같이 헤더를 가집니다.
+
+```txt
+department,student_number,name,age
+```
+
+현재 포함된 샘플 데이터는 아래입니다.
+
+- [schema/student.meta](/C:/developer_folder/jungle-sql-processor-2nd/schema/student.meta)
+- [data/student.csv](/C:/developer_folder/jungle-sql-processor-2nd/data/student.csv)
+
+## SQL 동작 규칙
+
+### INSERT
+
+- 사용자는 `id`를 빼고 나머지 컬럼만 넣습니다.
+- 최종 저장되는 내부 PK `__internal_id`는 시스템이 자동으로 결정합니다.
+- 새 내부 PK는 현재 테이블의 최대 `__internal_id + 1`입니다.
+- 저장 성공 후 `__internal_id -> CSV 행 위치`가 메모리 B+ 트리에 등록됩니다.
+
+예시:
+
+```sql
+INSERT INTO 학생 (department, student_number, name, age)
+VALUES ('컴퓨터공학과', '2024001', '김민수', 20);
+```
+
+### SELECT
+
+- 일반 `SELECT`와 일반 `WHERE`는 기존 CSV 선형 탐색을 사용합니다.
+- `WHERE id = <number>`는 정수 검증 후 B+ 트리 인덱스를 사용합니다.
+- `WHERE id = abc` 같은 입력은 오류입니다.
+- `SELECT id`는 시연과 검증을 위해 내부 `__internal_id`를 보여 줍니다.
+- `SELECT *`는 기존 의미를 유지하기 위해 사용자 컬럼만 출력하고, 내부 `__internal_id`는 자동 포함하지 않습니다.
+
+예시:
+
+```sql
+SELECT * FROM 학생;
+SELECT id, name FROM 학생;
+SELECT name, age FROM 학생 WHERE department = '컴퓨터공학과';
+SELECT * FROM 학생 WHERE id = 1000;
+```
 
 ## 발표 시연 순서
 
-먼저 실행합니다.
+### 1. 기본 조회
 
 ```bash
-./build/bin/sqlparser
+./build/bin/sqlparser -e "SELECT * FROM 학생;"
 ```
 
-### 1. id 없이 INSERT
-
-```sql
-INSERT INTO student (department, student_number, name, age) VALUES ('경제학과', '2026005', '김금융', 21);
-```
-
-기대 출력:
-
-```text
-INSERT 1
-Elapsed time: ...
-```
-
-### 2. 일반 컬럼 name으로 조회
-
-```sql
-SELECT id, department, student_number, name, age FROM student WHERE name = '김금융';
-```
-
-이 조회는 `name` 인덱스가 없으므로 CSV 선형 탐색을 수행합니다.
-
-### 3. id로 조회
-
-아래 id 값은 현재 CSV 상태에 따라 달라질 수 있습니다. 직전 조회 결과에 나온 가장 마지막 id를 사용하면 됩니다.
-
-```sql
-SELECT id, department, student_number, name, age FROM student WHERE id = 101014;
-```
-
-이 조회는 B+ 트리 인덱스를 사용합니다. 일반 컬럼 조회보다 elapsed time이 작게 나오는 것을 확인할 수 있습니다.
-
-REPL 종료:
-
-```text
-.exit
-```
-
-## 벤치마크
-
-벤치마크는 별도 바이너리 `benchmark_runner`로 실행합니다.
+### 2. 자동 ID 부여 INSERT
 
 ```bash
-make benchmark
+./build/bin/sqlparser -e "INSERT INTO 학생 (department, student_number, name, age) VALUES ('컴퓨터공학과', '2024001', '김민수', 20);"
 ```
 
-### prepare 모드
+### 3. 인덱스 조회
 
-CSV를 헤더만 남기고 초기화한 뒤, 지정한 개수만큼 데이터를 생성해 INSERT합니다.
+```bash
+./build/bin/sqlparser -e "SELECT * FROM 학생 WHERE id = 1;"
+```
+
+### 3-1. 자동 부여된 내부 id 확인
+
+```bash
+./build/bin/sqlparser -e "SELECT id, name FROM 학생 WHERE id = 1;"
+```
+
+### 4. 일반 WHERE 조회
+
+```bash
+./build/bin/sqlparser -e "SELECT name FROM 학생 WHERE department = '컴퓨터공학과';"
+```
+
+### 5. 벤치마크 실행
 
 ```bash
 ./build/bin/benchmark_runner prepare benchmark-workdir/schema benchmark-workdir/data student 1000000
+./build/bin/benchmark_runner query-only benchmark-workdir/schema benchmark-workdir/data student 500000 10
 ```
 
-출력:
+설명:
 
-```text
-Prepared rows: 1000000
-Insert time: ...
-```
+- `benchmark-workdir/schema`: 벤치마크 전용 스키마 폴더
+- `benchmark-workdir/data`: 벤치마크 전용 CSV 폴더
+- `student`: 벤치마크 대상 테이블 이름
+- `1000000`: prepare 모드에서 미리 생성하고 삽입할 레코드 수
+- `500000`: query-only 모드에서 조회 비교에 사용할 내부 PK 값
+- `10`: 발표 시연용 query-only 반복 횟수
 
-### query-only 모드
+발표 시연에서는 `query-only` 반복 횟수를 `10`으로 두는 것을 권장합니다.
+이 정도면 평균값의 의미를 유지하면서도 결과가 너무 늦지 않게 출력됩니다.
 
-이미 준비된 데이터셋에서 조회 성능만 비교합니다.
+발표에서는 prepare로 100만 건 데이터셋을 미리 만들어 두고, 시연 시간에는 query-only로 조회 시간만 비교한 뒤 아래처럼 일반 CLI로 실제 조회 결과 표를 보여 주면 흐름이 자연스럽습니다.
 
 ```bash
-./build/bin/benchmark_runner query-only benchmark-workdir/schema benchmark-workdir/data student 100000 10
-./build/bin/benchmark_runner query-only benchmark-workdir/schema benchmark-workdir/data student 1000000 10
+./build/bin/sqlparser -e "SELECT id, department, student_number, name, age FROM 학생 WHERE id = 500000;"
 ```
 
-비교 기준:
+## 빌드
 
-- 인덱스 조회: `WHERE id = <target_id>`
-- 선형 조회: 첫 번째 사용자 컬럼 기준 `WHERE department = 'department_<target_id>'`
-- 반복 횟수: 마지막 인자 `10`
-
-출력 예시:
-
-```text
-Query target id: 1000000
-Query target column: department
-Query target value: department_1000000
-Query repeats: 10
-Indexed query avg time: 0.090429 sec
-Linear query avg time: 0.627952 sec
-```
-
-주의할 점:
-
-- `prepare`는 기존 벤치마크 CSV를 초기화합니다.
-- `query-only`는 CSV를 초기화하지 않고 이미 준비된 데이터를 그대로 사용합니다.
-- 첫 id 조회에는 인덱스 재구성 비용이 섞일 수 있습니다.
-- 같은 프로세스 안에서 인덱스가 이미 로드된 뒤에는 `WHERE id = ...` 조회가 더 빠르게 동작합니다.
-
-## 빌드와 실행
-
-기본 CLI 빌드:
-
-```bash
-make
-```
-
-또는:
+Linux 또는 Docker 기준:
 
 ```bash
 make all
 ```
 
-테스트:
+테스트 바이너리:
 
 ```bash
 make test
 ```
 
-벤치마크 빌드:
+벤치마크 바이너리:
 
 ```bash
 make benchmark
 ```
+
+- `make` 또는 `make all`은 기본 CLI 바이너리 `sqlparser`를 빌드합니다.
+- `benchmark_runner`까지 최신 코드로 다시 만들려면 `make benchmark`를 별도로 실행해야 합니다.
+- Windows 환경에 따라 `make` 대신 `mingw32-make`를 사용할 수 있습니다.
+
+## CLI 사용법
 
 도움말:
 
@@ -308,13 +273,35 @@ make benchmark
 SQL 문자열 직접 실행:
 
 ```bash
-./build/bin/sqlparser -e "SELECT * FROM student;"
+./build/bin/sqlparser -e "SELECT * FROM 학생;"
+```
+
+출력 예시:
+
+```text
++----------------+----------------+--------+-----+
+| department     | student_number | name   | age |
++----------------+----------------+--------+-----+
+| 컴퓨터공학과   | 2024001        | 김민수 | 20  |
++----------------+----------------+--------+-----+
+```
+
+내부 PK 확인 시연은 `SELECT id, ...` 형태를 사용합니다.
+
+```bash
+./build/bin/sqlparser -e "SELECT id, name FROM 학생 WHERE id = 1;"
 ```
 
 SQL 파일 실행:
 
 ```bash
-./build/bin/sqlparser -f examples/select_name_age.sql
+./build/bin/sqlparser -f path/to/query.sql
+```
+
+표준입력으로 실행:
+
+```bash
+echo "SELECT name FROM 학생;" | ./build/bin/sqlparser
 ```
 
 REPL 실행:
@@ -330,82 +317,141 @@ REPL 종료 명령:
 - `exit`
 - `quit`
 
-macOS/Linux에서는 `./build/bin/sqlparser` 형식으로 실행합니다.
-Windows MinGW 환경에서는 `mingw32-make`, `.\build\bin\sqlparser.exe` 형식을 사용할 수 있습니다.
+## Docker 사용 예시
 
-## 디렉터리 구조
+이미지 빌드:
 
-```text
-src/app        CLI, 파일 입력, REPL 시작점
-src/sql        lexer, parser, AST
-src/execution  INSERT/SELECT 실행, 인덱스 경로 선택
-src/storage    schema 로딩, CSV 읽기/쓰기
-src/index      B+ 트리, 테이블별 인덱스 관리
-src/benchmark  대량 삽입 및 조회 성능 측정
-tests          단위/기능 테스트
-docs           요구사항, 아키텍처, 테스트 문서
-examples       SQL 예시 파일
+```bash
+docker build -t jungle-sql-processor-test .
 ```
 
-## 데이터 형식
+CLI 실행:
 
-테이블은 아래 두 파일이 모두 있어야 합니다.
-
-```text
-schema/<table>.meta
-data/<table>.csv
+```bash
+docker run --rm -it -v "C:/developer_folder/jungle-sql-processor-2nd:/workspace" -w /workspace jungle-sql-processor-test ./build/bin/sqlparser
 ```
 
-예시:
+테스트 실행:
 
-```text
-schema/student.meta
-data/student.csv
-```
-
-스키마 파일:
-
-```text
-table=학생
-columns=department,student_number,name,age
-```
-
-CSV 파일 첫 줄:
-
-```text
-department,student_number,name,age
+```bash
+docker run --rm -v "C:/developer_folder/jungle-sql-processor-2nd:/workspace" -w /workspace jungle-sql-processor-test bash scripts/docker-test.sh
 ```
 
 ## 테스트
 
 현재 테스트 러너 기준:
 
-- assertion 375개
-- B+ 트리 삽입/검색/split
-- 내부 id 자동 부여
-- `WHERE id` 인덱스 경로
-- 일반 `WHERE` 선형 탐색
-- 인덱스 재구성
-- CLI 오류 메시지
-- 벤치마크 데이터 재생성
+- 상위 테스트 함수 `31개`
+- assertion `375개`
 
 실행:
+
+```bash
+bash scripts/docker-test.sh
+```
+
+또는:
 
 ```bash
 make test
 ```
 
-## 발표 마무리 포인트
+테스트 범위 요약:
 
-이번 프로젝트를 통해 단순히 SQL 기능을 추가하는 데서 끝나지 않고, CSV 기반 저장 구조 위에 B+ 트리 인덱스를 붙여 조회 경로를 분리했습니다.
+- B+ 트리 기본 삽입/검색/분할
+- `id` 자동 부여
+- `WHERE id` 인덱스 경로
+- 일반 `WHERE` 선형 탐색
+- 인덱스 재구성 및 오류 복구
+- CLI 경계값 및 오류 메시지
+- 벤치마크 데이터 재생성
 
-`WHERE name = ...` 같은 일반 조건은 기존처럼 선형 탐색을 수행하지만, `WHERE id = ...` 조건은 메모리 B+ 트리에서 row offset을 찾고 해당 CSV 행만 읽습니다. 이를 통해 DB에서 인덱스가 왜 필요한지, 그리고 B+ 트리가 왜 인덱스 자료구조로 사용되는지 직접 확인할 수 있었습니다.
+상세 목록은 [docs/test-cases.md](/C:/developer_folder/jungle-sql-processor-2nd/docs/test-cases.md)에 정리돼 있습니다.
+
+## 벤치마크
+
+벤치마크는 별도 바이너리로 실행하며, `prepare`와 `query-only` 두 모드를 지원합니다.
+
+```bash
+./build/bin/benchmark_runner prepare <schema_dir> <data_dir> <table_name> <row_count>
+./build/bin/benchmark_runner query-only <schema_dir> <data_dir> <table_name> <target_id> [query_repeat]
+```
+
+예시:
+
+```bash
+./build/bin/benchmark_runner prepare benchmark-workdir/schema benchmark-workdir/data student 1000000
+./build/bin/benchmark_runner query-only benchmark-workdir/schema benchmark-workdir/data student 500000 10
+```
+
+인자 의미:
+
+- `<schema_dir>`: 벤치마크 대상 스키마 폴더
+- `<data_dir>`: 벤치마크 대상 CSV 폴더
+- `<table_name>`: 대상 테이블 이름
+- `<row_count>`: `prepare` 모드에서 생성하고 삽입할 총 레코드 수
+- `<target_id>`: `query-only` 모드에서 인덱스 조회 대상으로 삼을 `id`
+- `[query_repeat]`: `query-only` 모드에서 같은 조회를 몇 번 반복해서 평균을 낼지 정하는 선택 인자
+
+100만 건 시연용 권장 명령:
+
+```bash
+make benchmark
+./build/bin/benchmark_runner prepare benchmark-workdir/schema benchmark-workdir/data student 1000000
+./build/bin/benchmark_runner query-only benchmark-workdir/schema benchmark-workdir/data student 500000 10
+./build/bin/sqlparser -e "SELECT id, department, student_number, name, age FROM 학생 WHERE id = 500000;"
+```
+
+참고:
+
+- 더 안정적인 평균값이 필요하면 `query_repeat`를 `100`으로 올릴 수 있습니다.
+- 다만 선형 조회는 100만 건을 매번 순회하므로, `100`회 반복은 발표 시연용으로는 오래 걸릴 수 있습니다.
+
+100회 반복 측정 결과 캡처:
+
+- 아래 이미지는 1,000,000건 데이터셋에서 `WHERE id = ...` 인덱스 조회와 일반 컬럼 조건 조회를 비교한 실제 측정 결과입니다.
+- 단일 CLI 첫 실행은 인덱스 재구성 비용이 섞일 수 있으므로, 발표에서는 `query-only` 기준 평균 시간을 해석하는 것이 맞습니다.
+- 시연은 `10`회 반복으로 빠르게 보여주고, 아래 `100`회 반복 결과는 참고 자료로 함께 제시합니다.
+
+- 단일 CLI 조회는 기능 시연용이고, `query-only`는 성능 비교용입니다.
+- `benchmark_runner` 실행 전에는 `make benchmark`를 먼저 실행해야 최신 바이너리를 사용할 수 있습니다.
+- Windows 시연에서는 PowerShell 또는 Windows Terminal을 사용하는 편이 안정적이고, 한글이 깨지면 UTF-8 코드페이지 설정을 먼저 확인하세요.
+
+![Indexing Result Comparison](docs/images/select-comparison-highlighted-2.png)
+
+출력:
+
+- `prepare`
+  - 삽입한 행 수
+  - 전체 삽입 시간
+- `query-only`
+  - 조회 대상 `id`
+  - 비교에 사용할 일반 컬럼 이름과 값
+  - 반복 조회 횟수
+  - `WHERE id = ...` 인덱스 조회 평균 시간
+  - 일반 컬럼 `WHERE ...` 선형 조회 평균 시간
+
+주의:
+
+- `prepare`는 시작 시 지정한 CSV를 헤더만 남기고 초기화한 뒤 같은 입력 파라미터로 같은 데이터셋을 다시 생성합니다.
+- `query-only`는 이미 준비된 데이터셋을 그대로 사용하며, CSV를 다시 초기화하지 않습니다.
+- 실데이터를 보호하려면 기본 샘플인 `benchmark-workdir/schema`, `benchmark-workdir/data`에서 실행하는 것이 좋습니다.
+- 기본 벤치마크 작업 디렉터리 샘플은 아래에 포함돼 있습니다.
+  - [benchmark-workdir/schema/student.meta](/C:/developer_folder/jungle-sql-processor-2nd/benchmark-workdir/schema/student.meta)
+  - [benchmark-workdir/data/student.csv](/C:/developer_folder/jungle-sql-processor-2nd/benchmark-workdir/data/student.csv)
+
+## 이번 주 발표에서 강조할 포인트
+
+- 이전 차수 코드를 버리지 않고 7주차 요구를 덧붙였는가
+- `WHERE id` 경로만 인덱스를 타도록 책임 분리가 되어 있는가
+- 벤치마크와 테스트를 통해 결과를 검증했는가
+- 구현한 코드를 팀원이 직접 설명할 수 있는가
 
 ## 참고 문서
 
-- [docs/requirements.md](docs/requirements.md)
-- [docs/architecture.md](docs/architecture.md)
-- [docs/test-cases.md](docs/test-cases.md)
-- [learning-docs/beginner-guide.md](learning-docs/beginner-guide.md)
-- [learning-docs/docker-basics-for-week7.md](learning-docs/docker-basics-for-week7.md)
-- [learning-docs/makefile-basics-for-sql-processor.md](learning-docs/makefile-basics-for-sql-processor.md)
+- [docs/requirements.md](/C:/developer_folder/jungle-sql-processor-2nd/docs/requirements.md)
+- [docs/architecture.md](/C:/developer_folder/jungle-sql-processor-2nd/docs/architecture.md)
+- [docs/test-cases.md](/C:/developer_folder/jungle-sql-processor-2nd/docs/test-cases.md)
+- [learning-docs/beginner-guide.md](/C:/developer_folder/jungle-sql-processor-2nd/learning-docs/beginner-guide.md)
+- [learning-docs/docker-basics-for-week7.md](/C:/developer_folder/jungle-sql-processor-2nd/learning-docs/docker-basics-for-week7.md)
+- [learning-docs/makefile-basics-for-sql-processor.md](/C:/developer_folder/jungle-sql-processor-2nd/learning-docs/makefile-basics-for-sql-processor.md)
