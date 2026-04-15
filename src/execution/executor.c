@@ -21,6 +21,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct {
+    StringList *rows;
+    int count;
+    int capacity;
+} SelectRowBuffer;
+
 /* 실행 실패 결과를 공통 형식으로 채우는 작은 헬퍼 함수다. */
 static void set_exec_error(ExecResult *result, const char *message) {
     result->ok = 0;
@@ -257,30 +263,127 @@ static int row_matches_where(const SelectStatement *statement, const StringList 
     return strcmp(fields->items[where_index], statement->where_value) == 0;
 }
 
-/* 선택된 컬럼만 골라 한 줄 결과로 출력한다. */
-static void print_selected_row(FILE *out, const StringList *fields, const int *selected_indexes, int selected_count) {
+/* 표 렌더링이 끝나면 버퍼에 임시로 모아 둔 행 복사본을 해제한다. */
+static void select_row_buffer_free(SelectRowBuffer *buffer) {
     int index;
 
-    for (index = 0; index < selected_count; index++) {
-        if (index > 0) {
-            fprintf(out, " | ");
-        }
-        fprintf(out, "%s", fields->items[selected_indexes[index]]);
+    for (index = 0; index < buffer->count; index++) {
+        string_list_free(&buffer->rows[index]);
     }
-    fprintf(out, "\n");
+
+    free(buffer->rows);
+    buffer->rows = NULL;
+    buffer->count = 0;
+    buffer->capacity = 0;
 }
 
-/* 결과 표의 헤더 행을 출력한다. */
-static void print_header_row(FILE *out, const StringList *headers) {
+/* 현재 행의 선택된 컬럼만 복사해 표 버퍼에 보관한다. */
+static int select_row_buffer_push(SelectRowBuffer *buffer, const StringList *fields, const int *selected_indexes, int selected_count, char *message, size_t message_size) {
+    int new_capacity;
+    StringList *new_rows;
+    StringList row = {0};
     int index;
 
-    for (index = 0; index < headers->count; index++) {
-        if (index > 0) {
-            fprintf(out, " | ");
+    if (buffer->count == buffer->capacity) {
+        new_capacity = buffer->capacity == 0 ? 4 : buffer->capacity * 2;
+        new_rows = (StringList *)realloc(buffer->rows, (size_t)new_capacity * sizeof(StringList));
+        if (new_rows == NULL) {
+            snprintf(message, message_size, "out of memory while preparing SELECT output");
+            return 0;
         }
-        fprintf(out, "%s", headers->items[index]);
+        buffer->rows = new_rows;
+        buffer->capacity = new_capacity;
     }
-    fprintf(out, "\n");
+
+    for (index = 0; index < selected_count; index++) {
+        if (!string_list_push(&row, fields->items[selected_indexes[index]])) {
+            string_list_free(&row);
+            snprintf(message, message_size, "out of memory while preparing SELECT output");
+            return 0;
+        }
+    }
+
+    buffer->rows[buffer->count] = row;
+    buffer->count++;
+    return 1;
+}
+
+/* 단순 문자열 길이를 기준으로 각 컬럼의 출력 폭을 계산한다. */
+static void compute_table_widths(const StringList *headers, const SelectRowBuffer *rows, int *column_widths) {
+    int column_index;
+    int row_index;
+    size_t width;
+
+    for (column_index = 0; column_index < headers->count; column_index++) {
+        column_widths[column_index] = (int)strlen(headers->items[column_index]);
+    }
+
+    for (row_index = 0; row_index < rows->count; row_index++) {
+        for (column_index = 0; column_index < headers->count; column_index++) {
+            width = strlen(rows->rows[row_index].items[column_index]);
+            if ((int)width > column_widths[column_index]) {
+                column_widths[column_index] = (int)width;
+            }
+        }
+    }
+}
+
+/* +-----+ 같은 ASCII 테두리 한 줄을 출력한다. */
+static void print_table_border(FILE *out, const int *column_widths, int column_count) {
+    int column_index;
+    int width_index;
+
+    fputc('+', out);
+    for (column_index = 0; column_index < column_count; column_index++) {
+        for (width_index = 0; width_index < column_widths[column_index] + 2; width_index++) {
+            fputc('-', out);
+        }
+        fputc('+', out);
+    }
+    fputc('\n', out);
+}
+
+/* 표의 한 행을 고정 폭 셀 형식으로 출력한다. */
+static void print_table_row(FILE *out, const StringList *row, const int *column_widths) {
+    int column_index;
+    int padding;
+    size_t cell_width;
+
+    fputc('|', out);
+    for (column_index = 0; column_index < row->count; column_index++) {
+        fprintf(out, " %s", row->items[column_index]);
+        cell_width = strlen(row->items[column_index]);
+        padding = column_widths[column_index] - (int)cell_width;
+        while (padding-- > 0) {
+            fputc(' ', out);
+        }
+        fprintf(out, " |");
+    }
+    fputc('\n', out);
+}
+
+/* 헤더와 데이터 전체를 받아 ASCII 테두리 표를 한 번에 출력한다. */
+static int print_result_table(FILE *out, const StringList *headers, const SelectRowBuffer *rows, char *message, size_t message_size) {
+    int *column_widths;
+    int row_index;
+
+    column_widths = (int *)calloc((size_t)headers->count, sizeof(int));
+    if (column_widths == NULL) {
+        snprintf(message, message_size, "out of memory while preparing SELECT output");
+        return 0;
+    }
+
+    compute_table_widths(headers, rows, column_widths);
+    print_table_border(out, column_widths, headers->count);
+    print_table_row(out, headers, column_widths);
+    print_table_border(out, column_widths, headers->count);
+    for (row_index = 0; row_index < rows->count; row_index++) {
+        print_table_row(out, &rows->rows[row_index], column_widths);
+    }
+    print_table_border(out, column_widths, headers->count);
+
+    free(column_widths);
+    return 1;
 }
 
 /*
@@ -294,6 +397,7 @@ static void print_header_row(FILE *out, const StringList *headers) {
 static int execute_index_select(const SelectStatement *statement, const Schema *schema, const char *data_dir, FILE *out, const StringList *headers, const int *selected_indexes, int selected_count, ExecResult *result) {
     TableIndexLookupResult lookup;
     StorageReadResult read_result;
+    SelectRowBuffer rows = {0};
     int where_id;
 
     if (!parse_int_strict(statement->where_value, &where_id)) {
@@ -308,7 +412,9 @@ static int execute_index_select(const SelectStatement *statement, const Schema *
     }
 
     if (!lookup.found) {
-        print_header_row(out, headers);
+        if (!print_result_table(out, headers, &rows, result->message, sizeof(result->message))) {
+            return 0;
+        }
         result->ok = 1;
         result->affected_rows = 0;
         snprintf(result->message, sizeof(result->message), "SELECT 0");
@@ -327,9 +433,19 @@ static int execute_index_select(const SelectStatement *statement, const Schema *
         return 0;
     }
 
-    print_header_row(out, headers);
-    print_selected_row(out, &read_result.fields, selected_indexes, selected_count);
+    if (!select_row_buffer_push(&rows, &read_result.fields, selected_indexes, selected_count, result->message, sizeof(result->message))) {
+        string_list_free(&read_result.fields);
+        return 0;
+    }
+
+    if (!print_result_table(out, headers, &rows, result->message, sizeof(result->message))) {
+        string_list_free(&read_result.fields);
+        select_row_buffer_free(&rows);
+        return 0;
+    }
+
     string_list_free(&read_result.fields);
+    select_row_buffer_free(&rows);
     result->ok = 1;
     result->affected_rows = 1;
     snprintf(result->message, sizeof(result->message), "SELECT 1");
@@ -351,6 +467,7 @@ static ExecResult execute_select(const SelectStatement *statement, const char *s
     char line[4096];
     StringList fields = {0};
     StringList headers = {0};
+    SelectRowBuffer rows = {0};
     int *selected_indexes = NULL;
     int selected_count;
     int where_index = -1;
@@ -391,8 +508,6 @@ static ExecResult execute_select(const SelectStatement *statement, const char *s
         free_schema(&schema_result.schema);
         return result;
     }
-
-    print_header_row(out, &headers);
 
     path = build_path(data_dir, schema_result.schema.storage_name, ".csv");
     if (path == NULL) {
@@ -455,14 +570,35 @@ static ExecResult execute_select(const SelectStatement *statement, const char *s
             continue;
         }
 
-        print_selected_row(out, &fields, selected_indexes, selected_count);
+        if (!select_row_buffer_push(&rows, &fields, selected_indexes, selected_count, result.message, sizeof(result.message))) {
+            fclose(file);
+            free(selected_indexes);
+            string_list_free(&headers);
+            string_list_free(&fields);
+            select_row_buffer_free(&rows);
+            free_schema(&schema_result.schema);
+            result.ok = 0;
+            return result;
+        }
+
         string_list_free(&fields);
         row_count++;
     }
 
     fclose(file);
+
+    if (!print_result_table(out, &headers, &rows, result.message, sizeof(result.message))) {
+        free(selected_indexes);
+        string_list_free(&headers);
+        select_row_buffer_free(&rows);
+        free_schema(&schema_result.schema);
+        result.ok = 0;
+        return result;
+    }
+
     free(selected_indexes);
     string_list_free(&headers);
+    select_row_buffer_free(&rows);
     free_schema(&schema_result.schema);
 
     result.ok = 1;

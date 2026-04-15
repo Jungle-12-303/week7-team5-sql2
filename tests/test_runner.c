@@ -513,6 +513,8 @@ static void test_select_execution_with_general_where(void) {
     output_text = read_entire_file(output_path, error, sizeof(error));
     expect_true(output_text != NULL, "read general WHERE output");
     if (output_text != NULL) {
+        expect_true(strstr(output_text, "+-------+") != NULL, "general WHERE prints ASCII table border");
+        expect_true(strstr(output_text, "| name  |") != NULL, "general WHERE prints padded table header");
         expect_true(strstr(output_text, "Alice") != NULL, "general WHERE prints first row");
         expect_true(strstr(output_text, "Carol") != NULL, "general WHERE prints second row");
         expect_true(strstr(output_text, "Bob") == NULL, "general WHERE excludes non-matching row");
@@ -558,6 +560,8 @@ static void test_select_execution_with_id_index(void) {
     output_text = read_entire_file(output_path, error, sizeof(error));
     expect_true(output_text != NULL, "read indexed id output");
     if (output_text != NULL) {
+        expect_true(strstr(output_text, "+------+") != NULL, "indexed id SELECT prints table border");
+        expect_true(strstr(output_text, "| name |") != NULL, "indexed id SELECT prints table header");
         expect_true(strstr(output_text, "Bob") != NULL, "indexed id SELECT prints matching row");
         expect_true(strstr(output_text, "Alice") == NULL, "indexed id SELECT excludes non-matching rows");
         free(output_text);
