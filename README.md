@@ -258,6 +258,10 @@ make test
 make benchmark
 ```
 
+- `make` 또는 `make all`은 기본 CLI 바이너리 `sqlparser`를 빌드합니다.
+- `benchmark_runner`까지 최신 코드로 다시 만들려면 `make benchmark`를 별도로 실행해야 합니다.
+- Windows 환경에 따라 `make` 대신 `mingw32-make`를 사용할 수 있습니다.
+
 ## CLI 사용법
 
 도움말:
@@ -408,6 +412,10 @@ make benchmark
 - 아래 이미지는 1,000,000건 데이터셋에서 `WHERE id = ...` 인덱스 조회와 일반 컬럼 조건 조회를 비교한 실제 측정 결과입니다.
 - 단일 CLI 첫 실행은 인덱스 재구성 비용이 섞일 수 있으므로, 발표에서는 `query-only` 기준 평균 시간을 해석하는 것이 맞습니다.
 - 시연은 `10`회 반복으로 빠르게 보여주고, 아래 `100`회 반복 결과는 참고 자료로 함께 제시합니다.
+
+- 단일 CLI 조회는 기능 시연용이고, `query-only`는 성능 비교용입니다.
+- `benchmark_runner` 실행 전에는 `make benchmark`를 먼저 실행해야 최신 바이너리를 사용할 수 있습니다.
+- Windows 시연에서는 PowerShell 또는 Windows Terminal을 사용하는 편이 안정적이고, 한글이 깨지면 UTF-8 코드페이지 설정을 먼저 확인하세요.
 
 ![Indexing Result Comparison](docs/images/select-comparison-highlighted-2.png)
 

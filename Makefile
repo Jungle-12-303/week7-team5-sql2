@@ -45,5 +45,10 @@ test: $(APP_BIN) $(TEST_BIN)
 
 benchmark: $(BENCHMARK_BIN)
 
+ifeq ($(OS),Windows_NT)
+clean:
+	cmd /c "if exist \"$(BUILD_DIR)\" rmdir /s /q \"$(BUILD_DIR)\""
+else
 clean:
 	rm -rf $(BUILD_DIR)
+endif

@@ -404,7 +404,7 @@ SchemaResult load_schema(const char *schema_dir, const char *data_dir, const cha
      * 그래서 스키마 로딩 단계에서 먼저 막아 두어야 이후 parser/executor 쪽 해석이
      * 흔들리지 않는다.
      */
-    if (schema_find_reserved_id_column(&result.schema) >= 0) {
+    if (schema_has_reserved_id_column(&result.schema)) {
         free_schema(&result.schema);
         set_schema_error(&result, "reserved column name 'id' is not allowed in user schema");
         return result;
@@ -439,9 +439,9 @@ int schema_find_column(const Schema *schema, const char *column_name) {
     return string_list_index_of(&schema->columns, column_name);
 }
 
-/* 사용자 스키마에 예약 이름 `id`가 들어 있는지 확인하는 편의 함수다. */
-int schema_find_reserved_id_column(const Schema *schema) {
-    return schema_find_column(schema, "id");
+/* 사용자 스키마에 예약 이름 `id`가 들어 있는지 여부만 간단히 확인한다. */
+int schema_has_reserved_id_column(const Schema *schema) {
+    return schema_find_column(schema, "id") >= 0;
 }
 
 /* Schema 구조체가 소유한 문자열과 컬럼 리스트 메모리를 정리한다. */

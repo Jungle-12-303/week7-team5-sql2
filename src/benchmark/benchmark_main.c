@@ -136,7 +136,7 @@ static int build_select_statement(const char *table_name, const char *column_nam
 }
 
 /* 같은 질의를 여러 번 실행해 평균 시간을 계산한다. */
-static double run_query_benchmark(const Statement *statement, const char *schema_dir, const char *data_dir, int repeat_count) {
+static double run_query_benchmark(const Statement *statement, const char *schema_dir, const char *data_dir, int repeat_count, char *message, size_t message_size) {
     FILE *sink;
     clock_t started;
     int index;
@@ -147,6 +147,7 @@ static double run_query_benchmark(const Statement *statement, const char *schema
      */
     sink = tmpfile();
     if (sink == NULL) {
+        snprintf(message, message_size, "failed to create temporary output sink for benchmark query");
         return -1.0;
     }
 
@@ -158,6 +159,7 @@ static double run_query_benchmark(const Statement *statement, const char *schema
     for (index = 0; index < repeat_count; index++) {
         ExecResult result = execute_statement(statement, schema_dir, data_dir, sink);
         if (!result.ok) {
+            snprintf(message, message_size, "%s", result.message);
             fclose(sink);
             return -1.0;
         }
@@ -262,6 +264,8 @@ static int run_query_only_mode(const char *schema_dir, const char *data_dir, con
     char *other_value = NULL;
     double indexed_time;
     double linear_time;
+    char indexed_error[256] = {0};
+    char linear_error[256] = {0};
 
     /* query-only는 이미 준비된 CSV를 그대로 읽기만 하므로 우선 스키마만 로드한다. */
     schema_result = load_schema(schema_dir, data_dir, table_name);
@@ -302,10 +306,19 @@ static int run_query_only_mode(const char *schema_dir, const char *data_dir, con
      * 측정 시작 전 런타임 인덱스 상태를 명시적으로 초기화한다.
      */
     table_index_registry_reset();
-    indexed_time = run_query_benchmark(&id_select, schema_dir, data_dir, query_repeat);
-    linear_time = run_query_benchmark(&other_select, schema_dir, data_dir, query_repeat);
-    if (indexed_time < 0.0 || linear_time < 0.0) {
-        fprintf(stderr, "error: failed to execute benchmark query\n");
+    indexed_time = run_query_benchmark(&id_select, schema_dir, data_dir, query_repeat, indexed_error, sizeof(indexed_error));
+    if (indexed_time < 0.0) {
+        fprintf(stderr, "error: indexed benchmark query failed: %s\n", indexed_error);
+        free(other_value);
+        free_generated_statement(&id_select);
+        free_generated_statement(&other_select);
+        free_schema(&schema_result.schema);
+        return 1;
+    }
+
+    linear_time = run_query_benchmark(&other_select, schema_dir, data_dir, query_repeat, linear_error, sizeof(linear_error));
+    if (linear_time < 0.0) {
+        fprintf(stderr, "error: linear benchmark query failed: %s\n", linear_error);
         free(other_value);
         free_generated_statement(&id_select);
         free_generated_statement(&other_select);

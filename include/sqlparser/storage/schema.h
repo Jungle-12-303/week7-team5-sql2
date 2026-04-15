@@ -44,10 +44,10 @@ int schema_find_column(const Schema *schema, const char *column_name);
  * 예약되어 있으므로, 사용자 스키마 컬럼명으로는 사용할 수 없다.
  *
  * 반환값:
- * - 0 이상: 예약 이름 `id`가 등장한 위치
- * - -1: 예약 이름 `id`가 없음
+ * - 1: 예약 이름 `id`가 있음
+ * - 0: 예약 이름 `id`가 없음
  */
-int schema_find_reserved_id_column(const Schema *schema);
+int schema_has_reserved_id_column(const Schema *schema);
 
 /* Schema 내부의 동적 메모리를 정리한다. */
 void free_schema(Schema *schema);
