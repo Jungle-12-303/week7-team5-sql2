@@ -76,7 +76,7 @@ include/sqlparser/
 
 - 명령행 인자 처리
 - SQL 파일 입력 / 직접 입력 / REPL 처리
-- 벤치마크 모드 또는 일반 실행 모드 분기
+- 일반 SQL 처리기의 실행 흐름 시작
 
 비책임:
 
@@ -268,7 +268,9 @@ benchmark -> execution / storage / index
 현재 코드 기준 주요 연결 지점은 아래다.
 
 - `src/app/main.c`
-  일반 실행과 벤치마크 실행의 진입점
+  일반 SQL 처리기 CLI 진입점
+- `src/benchmark/benchmark_main.c`
+  벤치마크 전용 진입점
 - `src/sql/parser.c`
   이미 `WHERE` AST 필드가 있으므로 `WHERE id = value` 표현 재사용
 - `src/execution/executor.c`
@@ -291,8 +293,9 @@ benchmark -> execution / storage / index
 권장 방식:
 
 - `src/benchmark/benchmark_main.c` 추가
+- 벤치마크는 전용 schema/data 작업 디렉터리에서 실행
 - 특정 테이블에 1,000,000건 이상 레코드 생성
-- 같은 입력 파라미터 또는 같은 시드를 사용하면 같은 데이터셋을 다시 생성
+- 같은 입력 파라미터로 기존 벤치마크 CSV를 헤더 기준으로 초기화한 뒤 같은 데이터셋을 다시 생성
 - 같은 프로세스에서
   `WHERE id = ?`
   `WHERE name = ?`

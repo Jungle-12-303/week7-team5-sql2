@@ -10,6 +10,40 @@
 #include <string.h>
 #include <time.h>
 
+static int write_csv_header(const Schema *schema, const char *data_dir, char *message, size_t message_size) {
+    char *path;
+    FILE *file;
+    int index;
+
+    path = build_path(data_dir, schema->storage_name, ".csv");
+    if (path == NULL) {
+        snprintf(message, message_size, "out of memory while building benchmark CSV path");
+        return 0;
+    }
+
+    file = fopen(path, "wb");
+    free(path);
+    if (file == NULL) {
+        snprintf(message, message_size, "failed to open benchmark CSV for reset");
+        return 0;
+    }
+
+    for (index = 0; index < schema->columns.count; index++) {
+        if (index > 0) {
+            fputc(',', file);
+        }
+        fputs(schema->columns.items[index], file);
+    }
+    fputc('\n', file);
+
+    if (fclose(file) != 0) {
+        snprintf(message, message_size, "failed to finalize benchmark CSV reset");
+        return 0;
+    }
+
+    return 1;
+}
+
 static char *make_value_text(const char *column_name, int row_number) {
     char buffer[128];
 
@@ -78,19 +112,29 @@ static int build_select_statement(const char *table_name, const char *column_nam
            statement->as.select_statement.where_value != NULL;
 }
 
-static double run_query_benchmark(const Statement *statement, const char *schema_dir, const char *data_dir) {
-    ExecResult result;
-    FILE *sink = tmpfile();
-    clock_t started = clock();
+static double run_query_benchmark(const Statement *statement, const char *schema_dir, const char *data_dir, int repeat_count) {
+    FILE *sink;
+    clock_t started;
+    int index;
+
+    sink = tmpfile();
     if (sink == NULL) {
         return -1.0;
     }
-    result = execute_statement(statement, schema_dir, data_dir, sink);
-    fclose(sink);
-    if (!result.ok) {
-        return -1.0;
+
+    started = clock();
+    for (index = 0; index < repeat_count; index++) {
+        ExecResult result = execute_statement(statement, schema_dir, data_dir, sink);
+        if (!result.ok) {
+            fclose(sink);
+            return -1.0;
+        }
+        clearerr(sink);
+        rewind(sink);
     }
-    return (double)(clock() - started) / (double)CLOCKS_PER_SEC;
+
+    fclose(sink);
+    return ((double)(clock() - started) / (double)CLOCKS_PER_SEC) / (double)repeat_count;
 }
 
 int benchmark_main(int argc, char *argv[]) {
@@ -98,6 +142,7 @@ int benchmark_main(int argc, char *argv[]) {
     const char *data_dir;
     const char *table_name;
     int row_count;
+    int query_repeat = 100;
     SchemaResult schema_result;
     Statement statement = {0};
     Statement id_select = {0};
@@ -110,8 +155,8 @@ int benchmark_main(int argc, char *argv[]) {
     double indexed_time;
     double linear_time;
 
-    if (argc != 5) {
-        fprintf(stderr, "Usage: %s <schema_dir> <data_dir> <table_name> <row_count>\n", argv[0]);
+    if (argc != 5 && argc != 6) {
+        fprintf(stderr, "Usage: %s <schema_dir> <data_dir> <table_name> <row_count> [query_repeat]\n", argv[0]);
         return 1;
     }
 
@@ -120,6 +165,10 @@ int benchmark_main(int argc, char *argv[]) {
     table_name = argv[3];
     if (!parse_int_strict(argv[4], &row_count) || row_count <= 0) {
         fprintf(stderr, "error: row_count must be a positive integer\n");
+        return 1;
+    }
+    if (argc == 6 && (!parse_int_strict(argv[5], &query_repeat) || query_repeat <= 0)) {
+        fprintf(stderr, "error: query_repeat must be a positive integer\n");
         return 1;
     }
 
@@ -138,6 +187,12 @@ int benchmark_main(int argc, char *argv[]) {
 
     if (other_column == NULL) {
         fprintf(stderr, "error: benchmark table must have at least one non-id column\n");
+        free_schema(&schema_result.schema);
+        return 1;
+    }
+
+    if (!write_csv_header(&schema_result.schema, data_dir, schema_result.message, sizeof(schema_result.message))) {
+        fprintf(stderr, "error: %s\n", schema_result.message);
         free_schema(&schema_result.schema);
         return 1;
     }
@@ -178,8 +233,8 @@ int benchmark_main(int argc, char *argv[]) {
         return 1;
     }
 
-    indexed_time = run_query_benchmark(&id_select, schema_dir, data_dir);
-    linear_time = run_query_benchmark(&other_select, schema_dir, data_dir);
+    indexed_time = run_query_benchmark(&id_select, schema_dir, data_dir, query_repeat);
+    linear_time = run_query_benchmark(&other_select, schema_dir, data_dir, query_repeat);
     if (indexed_time < 0.0 || linear_time < 0.0) {
         fprintf(stderr, "error: failed to execute benchmark query\n");
         free(other_value);
@@ -190,8 +245,9 @@ int benchmark_main(int argc, char *argv[]) {
     }
 
     printf("Inserted rows: %d\n", row_count);
-    printf("Indexed query time: %.6f sec\n", indexed_time);
-    printf("Linear query time: %.6f sec\n", linear_time);
+    printf("Query repeats: %d\n", query_repeat);
+    printf("Indexed query avg time: %.6f sec\n", indexed_time);
+    printf("Linear query avg time: %.6f sec\n", linear_time);
 
     free(other_value);
     free_generated_statement(&id_select);
@@ -201,6 +257,8 @@ int benchmark_main(int argc, char *argv[]) {
     return 0;
 }
 
+#ifndef SQLPARSER_BENCHMARK_NO_MAIN
 int main(int argc, char *argv[]) {
     return benchmark_main(argc, argv);
 }
+#endif

@@ -1,4 +1,5 @@
 #include "sqlparser/common/util.h"
+#include "sqlparser/benchmark/benchmark.h"
 #include "sqlparser/execution/executor.h"
 #include "sqlparser/index/bptree.h"
 #include "sqlparser/index/table_index.h"
@@ -47,6 +48,22 @@ static int write_text_file(const char *path, const char *content) {
     fputs(content, file);
     fclose(file);
     return 1;
+}
+
+static int count_lines(const char *text) {
+    int count = 0;
+    int saw_character = 0;
+    while (*text != '\0') {
+        saw_character = 1;
+        if (*text == '\n') {
+            count++;
+        }
+        text++;
+    }
+    if (saw_character && *(text - 1) != '\n') {
+        count++;
+    }
+    return count;
 }
 
 static void build_child_path(char *buffer, size_t size, const char *root, const char *child) {
@@ -637,6 +654,48 @@ static void test_csv_escape(void) {
     string_list_free(&row);
 }
 
+static void test_benchmark_main_resets_dataset(void) {
+    char root[128];
+    char schema_dir[160];
+    char data_dir[160];
+    char schema_path[192];
+    char data_path[192];
+    char error[256];
+    char *first_run_text;
+    char *second_run_text;
+    char *argv_first[] = {"benchmark_runner", schema_dir, data_dir, "users", "5", "3"};
+    char *argv_second[] = {"benchmark_runner", schema_dir, data_dir, "users", "5", "3"};
+    int result_code;
+
+    reset_runtime_state();
+    expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create benchmark test directories");
+    build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
+    build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write benchmark schema");
+    expect_true(write_text_file(data_path, "id,name,age\n99,stale,55\n"), "write stale benchmark CSV");
+
+    result_code = benchmark_main(6, argv_first);
+    expect_true(result_code == 0, "benchmark_main runs with dedicated benchmark dataset");
+    first_run_text = read_entire_file(data_path, error, sizeof(error));
+    expect_true(first_run_text != NULL, "read benchmark CSV after first run");
+    if (first_run_text != NULL) {
+        expect_true(strstr(first_run_text, "99,stale,55") == NULL, "benchmark_main resets old benchmark data");
+        expect_true(count_lines(first_run_text) == 6, "benchmark_main writes header plus requested rows");
+        expect_true(strstr(first_run_text, "5,name_5,25") != NULL, "benchmark_main writes reproducible generated rows");
+    }
+
+    result_code = benchmark_main(6, argv_second);
+    expect_true(result_code == 0, "benchmark_main reruns with same parameters");
+    second_run_text = read_entire_file(data_path, error, sizeof(error));
+    expect_true(second_run_text != NULL, "read benchmark CSV after second run");
+    if (first_run_text != NULL && second_run_text != NULL) {
+        expect_true(strcmp(first_run_text, second_run_text) == 0, "benchmark_main reproduces same dataset with same inputs");
+    }
+
+    free(first_run_text);
+    free(second_run_text);
+}
+
 int main(void) {
     test_bptree_insert_and_search();
     test_parser_where();
@@ -656,6 +715,7 @@ int main(void) {
     test_insert_requires_id_column();
     test_select_where_id_requires_id_column();
     test_csv_escape();
+    test_benchmark_main_resets_dataset();
 
     table_index_registry_reset();
     printf("Tests run: %d\n", tests_run);

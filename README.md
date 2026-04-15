@@ -214,25 +214,29 @@ make test
 벤치마크는 별도 바이너리로 실행합니다.
 
 ```bash
-./build/bin/benchmark_runner <schema_dir> <data_dir> <table_name> <row_count>
+./build/bin/benchmark_runner <schema_dir> <data_dir> <table_name> <row_count> [query_repeat]
 ```
 
 예시:
 
 ```bash
-./build/bin/benchmark_runner schema data 학생 1000000
+./build/bin/benchmark_runner benchmark-workdir/schema benchmark-workdir/data student 1000000 100
 ```
 
 출력:
 
 - 삽입한 행 수
-- `WHERE id = ...` 인덱스 조회 시간
-- 일반 컬럼 `WHERE ...` 선형 조회 시간
+- 반복 조회 횟수
+- `WHERE id = ...` 인덱스 조회 평균 시간
+- 일반 컬럼 `WHERE ...` 선형 조회 평균 시간
 
 주의:
 
-- 벤치마크는 지정한 `data_dir`의 CSV 파일에 실제로 레코드를 추가합니다.
-- 실데이터를 보호하려면 벤치마크 전용 `schema/`, `data/` 복사본에서 실행하는 것이 좋습니다.
+- 벤치마크는 시작 시 지정한 CSV를 헤더만 남기고 초기화한 뒤 같은 입력 파라미터로 같은 데이터셋을 다시 생성합니다.
+- 실데이터를 보호하려면 기본 샘플인 `benchmark-workdir/schema`, `benchmark-workdir/data`에서 실행하는 것이 좋습니다.
+- 기본 벤치마크 작업 디렉터리 샘플은 아래에 포함돼 있습니다.
+  - [benchmark-workdir/schema/student.meta](/C:/developer_folder/jungle-sql-processor-2nd/benchmark-workdir/schema/student.meta)
+  - [benchmark-workdir/data/student.csv](/C:/developer_folder/jungle-sql-processor-2nd/benchmark-workdir/data/student.csv)
 - 현재 벤치마크는 실행 경로는 구현돼 있지만, 대량 데이터 성능 결과를 자동 검증하는 테스트는 아직 없습니다.
 
 ## 현재 상태 요약
