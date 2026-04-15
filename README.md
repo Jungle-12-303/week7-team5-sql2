@@ -389,7 +389,11 @@ make benchmark
 
 100회 반복 측정 결과 캡처:
 
-![Select Comparison](docs/images/select-comparison.png)
+- 아래 이미지는 1,000,000건 데이터셋에서 `WHERE id = ...` 인덱스 조회와 일반 컬럼 조건 조회를 비교한 실제 측정 결과입니다.
+- 단일 CLI 첫 실행은 인덱스 재구성 비용이 섞일 수 있으므로, 발표에서는 `query-only` 기준 평균 시간을 해석하는 것이 맞습니다.
+- 시연은 `10`회 반복으로 빠르게 보여주고, 아래 `100`회 반복 결과는 참고 자료로 함께 제시합니다.
+
+![Indexing Result Comparison](docs/images/indexing-result-comparison-highlighted.png)
 
 출력:
 

@@ -365,6 +365,25 @@ static void test_cli_bare_directory_argument_is_not_sql(void) {
     expect_true(strstr(stderr_text, "Usage:") != NULL, "CLI prints usage after bare directory argument error");
 }
 
+static void test_cli_success_output_includes_elapsed_time(void) {
+    char root[128];
+    char schema_dir[160];
+    char data_dir[160];
+    char stdout_text[4096];
+    char stderr_text[4096];
+    int exit_code;
+
+    reset_runtime_state();
+    expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create CLI success timing test directories");
+
+    expect_true(run_cli_command(root, "-e \"SELECT * FROM student WHERE id = 1;\"", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with successful SELECT");
+    expect_true(exit_code == 0, "CLI returns zero for successful SELECT");
+    expect_true(stderr_text[0] == '\0', "CLI successful SELECT does not print stderr");
+    expect_true(strstr(stdout_text, "+----+") != NULL, "CLI successful SELECT prints result table");
+    expect_true(strstr(stdout_text, "SELECT 1") != NULL, "CLI successful SELECT prints affected row summary");
+    expect_true(strstr(stdout_text, "Elapsed time: ") != NULL, "CLI successful SELECT prints elapsed time");
+}
+
 static void test_schema_loading_with_alias_filename(void) {
     char root[128];
     char schema_dir[160];
@@ -1045,6 +1064,7 @@ int main(void) {
     test_parser_utf8_identifiers();
     test_cli_error_messages();
     test_cli_bare_directory_argument_is_not_sql();
+    test_cli_success_output_includes_elapsed_time();
     test_schema_loading_with_alias_filename();
     test_schema_reports_missing_directory();
     test_schema_reports_alias_candidate_open_failure();

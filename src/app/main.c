@@ -27,6 +27,7 @@
 #include <stdlib.h>
 // strlen, memcpy 같은 문자열 함수를 사용합니다.
 #include <string.h>
+#include <time.h>
 #include <sys/stat.h>
 
 #ifdef _MSC_VER
@@ -289,11 +290,15 @@ static int execute_sql_text(const char *sql_text, FILE *out, char *error, size_t
     TokenArray tokens = {0};
     ParseResult parse_result;
     ExecResult exec_result;
+    clock_t started;
+    double elapsed_seconds;
 
     if (is_blank_string(sql_text)) {
         snprintf(error, error_size, "missing SQL statement");
         return 0;
     }
+
+    started = clock();
 
     if (!lex_sql(sql_text, &tokens, error, error_size)) {
         return 0;
@@ -317,6 +322,9 @@ static int execute_sql_text(const char *sql_text, FILE *out, char *error, size_t
     if (exec_result.message[0] != '\0') {
         fprintf(out, "%s\n", exec_result.message);
     }
+
+    elapsed_seconds = (double)(clock() - started) / (double)CLOCKS_PER_SEC;
+    fprintf(out, "Elapsed time: %.6f sec\n", elapsed_seconds);
 
     free_statement(&parse_result.statement);
     free_tokens(&tokens);
