@@ -325,17 +325,19 @@ static void test_cli_error_messages(void) {
     expect_true(run_cli_command(root, "-f", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with missing file path");
     expect_true(exit_code != 0, "CLI returns non-zero for missing file path");
     expect_true(strstr(stderr_text, "error: missing file path after -f") != NULL, "CLI reports missing file path after -f");
-    expect_true(strstr(stderr_text, "Usage:") != NULL, "CLI prints usage after missing file path");
+    expect_true(strstr(stderr_text, "[사용법]") != NULL, "CLI prints usage after missing file path");
+    expect_true(strstr(stderr_text, "============================================================") != NULL, "CLI usage includes visual separator after missing file path");
 
     expect_true(run_cli_command(root, "-f build/tests/does_not_exist/query.sql", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with missing SQL file");
     expect_true(exit_code != 0, "CLI returns non-zero for missing SQL file");
     expect_true(strstr(stderr_text, "error: failed to open SQL file 'build/tests/does_not_exist/query.sql'") != NULL, "CLI reports missing SQL file path");
-    expect_true(strstr(stderr_text, "Usage:") != NULL, "CLI prints usage after missing SQL file");
+    expect_true(strstr(stderr_text, "[사용법]") != NULL, "CLI prints usage after missing SQL file");
 
     expect_true(run_cli_command(root, "--bogus", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with unknown option");
     expect_true(exit_code != 0, "CLI returns non-zero for unknown option");
     expect_true(strstr(stderr_text, "error: unknown option: --bogus") != NULL, "CLI reports unknown option directly");
-    expect_true(strstr(stderr_text, "Usage:") != NULL, "CLI prints usage after unknown option");
+    expect_true(strstr(stderr_text, "[사용법]") != NULL, "CLI prints usage after unknown option");
+    expect_true(strstr(stderr_text, "[옵션]") != NULL, "CLI usage includes options section after unknown option");
 
     expect_true(run_cli_command(root, "-f -", "SELECT", stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with invalid stdin SQL");
     expect_true(exit_code != 0, "CLI returns non-zero for invalid stdin SQL");
@@ -362,7 +364,7 @@ static void test_cli_bare_directory_argument_is_not_sql(void) {
     expect_true(exit_code != 0, "CLI returns non-zero for bare directory argument");
     expect_true(strstr(stderr_text, "error: path is a directory, not a SQL file: ") != NULL, "CLI reports bare directory argument as file path error");
     expect_true(strstr(stderr_text, directory_path) != NULL, "CLI includes bare directory path in error");
-    expect_true(strstr(stderr_text, "Usage:") != NULL, "CLI prints usage after bare directory argument error");
+    expect_true(strstr(stderr_text, "[사용법]") != NULL, "CLI prints usage after bare directory argument error");
 }
 
 static void test_cli_success_output_includes_elapsed_time(void) {

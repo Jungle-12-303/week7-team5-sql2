@@ -333,24 +333,39 @@ static char *load_sql_from_argument(const char *value, int force_file, char *err
 // 사용자에게 보여줄 CLI 사용법을 출력합니다.
 /* 사용자가 --help 또는 잘못된 인자를 넣었을 때 보여 줄 도움말을 출력한다. */
 static void print_usage(FILE *stream, const char *program_name) {
-    /* 실행 형식과 옵션 요약을 먼저 출력한다. */
-    fprintf(stream, "Usage: %s [OPTION]... [SQL_OR_FILE]\n", program_name);
-    fprintf(stream, "       %s\n", program_name);
+    /* 콘솔에서 눈에 잘 들어오도록 상단 제목과 구분선을 먼저 출력한다. */
+    fprintf(stream, "============================================================\n");
+    fprintf(stream, " SQL Processor 도움말\n");
+    fprintf(stream, "============================================================\n");
     fprintf(stream, "\n");
-    fprintf(stream, "Options:\n");
-    fprintf(stream, "  -e, --execute SQL   execute a SQL statement\n");
-    fprintf(stream, "  -f, --file PATH     execute SQL loaded from PATH\n");
-    fprintf(stream, "  -h, --help          show this help message\n");
+
+    /* 실행 형식 요약이다. bare argument도 허용한다는 점을 함께 보여 준다. */
+    fprintf(stream, "[사용법]\n");
+    fprintf(stream, "  %s [옵션]... [SQL_또는_파일]\n", program_name);
+    fprintf(stream, "  %s\n", program_name);
     fprintf(stream, "\n");
-    fprintf(stream, "Interactive mode starts when no arguments are given on a terminal.\n");
-    fprintf(stream, "In interactive mode, enter either a SQL statement or a SQL file path.\n");
-    fprintf(stream, "Use .exit, .quit, exit, or quit to leave the prompt.\n");
+
+    /* 지원하는 CLI 옵션 목록이다. */
+    fprintf(stream, "[옵션]\n");
+    fprintf(stream, "  -e, --execute SQL   SQL 문장을 직접 실행합니다\n");
+    fprintf(stream, "  -f, --file PATH     PATH에서 SQL 파일을 읽어 실행합니다\n");
+    fprintf(stream, "  -h, --help          이 도움말을 출력합니다\n");
     fprintf(stream, "\n");
+
+    /* 인자 없이 실행했을 때 들어가는 REPL 사용법도 같이 보여 준다. */
+    fprintf(stream, "[대화형 모드]\n");
+    fprintf(stream, "  터미널에서 인자 없이 실행하면 대화형 모드가 시작됩니다.\n");
+    fprintf(stream, "  대화형 모드에서는 SQL 문장 또는 SQL 파일 경로를 입력할 수 있습니다.\n");
+    fprintf(stream, "  프롬프트를 종료하려면 .exit, .quit, exit, quit 중 하나를 입력하세요.\n");
+    fprintf(stream, "\n");
+
     /* 사용자가 바로 따라 할 수 있는 대표 예시를 마지막에 모아 보여 준다. */
-    fprintf(stream, "Examples:\n");
+    fprintf(stream, "[예시]\n");
     fprintf(stream, "  %s -e \"SELECT * FROM student;\"\n", program_name);
     fprintf(stream, "  %s -f examples/select_name_age.sql\n", program_name);
     fprintf(stream, "  echo \"SELECT name FROM student;\" | %s\n", program_name);
+    fprintf(stream, "\n");
+    fprintf(stream, "============================================================\n");
 }
 
 // SQL 문자열 하나를 lexer -> parser -> executor 순서로 처리합니다.
