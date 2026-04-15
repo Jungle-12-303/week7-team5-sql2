@@ -2,21 +2,17 @@
 
 파일 기반 SQL 처리기에 숨은 내부 PK `__internal_id` 자동 부여와 메모리 기반 B+ 트리 인덱스를 붙여, `WHERE id = ...` 조회를 최적화하는 7주차 프로젝트입니다.
 
-기준 문서는 [docs/architecture.md](/C:/developer_folder/jungle-sql-processor-2nd/docs/architecture.md)와 [docs/requirements.md](/C:/developer_folder/jungle-sql-processor-2nd/docs/requirements.md)입니다. 구현 설명은 이 README보다 두 문서를 우선합니다.
-
-## 발표용 요약
-
 ### 문제 정의
 
 6주차 SQL 처리기는 CSV를 선형 탐색하므로, 데이터가 커질수록 특정 레코드를 찾는 비용이 계속 커집니다.
 
-7주차 목표는 아래 3가지였습니다.
+### 7주차 목표
 
 - `INSERT` 시 레코드에 숨은 내부 PK `__internal_id`를 자동 부여한다.
 - `__internal_id`를 키로 사용하는 메모리 기반 B+ 트리를 만든다.
 - `WHERE id = <number>` 조회는 인덱스를 사용하고, 다른 컬럼 조건은 기존 선형 탐색을 유지한다.
 
-### 이번 주 핵심 구현
+### 핵심 구현
 
 - 기존 `INSERT`, `SELECT`, `SELECT ... WHERE` 흐름 유지
 - 숨은 내부 PK `__internal_id` 자동 부여
@@ -24,15 +20,6 @@
 - `WHERE id = <number>` 인덱스 조회
 - CSV 기준 인덱스 재구성
 - 1,000,000건 이상 삽입 가능한 성능 측정 진입점 제공
-- 단위 테스트 및 기능 테스트 작성
-
-### 발표에서 보여줄 차별점
-
-- 기존 SQL 처리기를 버리지 않고 그대로 확장했다는 점
-- 일반 조회와 인덱스 조회가 코드 경로에서 명확히 분리된다는 점
-- 테스트와 성능 비교를 함께 준비해 결과물뿐 아니라 검증 과정도 보여줄 수 있다는 점
-
-## 시각 자료
 
 ### 1. 전체 구조
 
@@ -90,17 +77,6 @@ CSV 기반 저장소는 구현이 단순하지만, 원하는 레코드를 찾으
 - REPL 실행
 - 별도 성능 비교 바이너리
 
-## 현재 제외 범위
-
-- `UPDATE`
-- `DELETE`
-- `JOIN`
-- `ORDER BY`
-- `GROUP BY`
-- 복합 `WHERE`
-- 범위 검색 최적화
-- 디스크 기반 B+ 트리
-
 ## 디렉터리 구조
 
 - `src/app`
@@ -121,31 +97,6 @@ CSV 기반 저장소는 구현이 단순하지만, 원하는 레코드를 찾으
   요구사항, 아키텍처, 테스트 문서
 - `learning-docs`
   초심자용 학습 문서
-
-## 데이터 형식
-
-테이블은 아래 두 파일이 모두 있어야 합니다.
-
-- `schema/<storage_name>.meta`
-- `data/<storage_name>.csv`
-
-예시:
-
-```txt
-table=학생
-columns=department,student_number,name,age
-```
-
-같은 테이블의 CSV 첫 줄은 아래와 같이 헤더를 가집니다.
-
-```txt
-department,student_number,name,age
-```
-
-현재 포함된 샘플 데이터는 아래입니다.
-
-- [schema/student.meta](/C:/developer_folder/jungle-sql-processor-2nd/schema/student.meta)
-- [data/student.csv](/C:/developer_folder/jungle-sql-processor-2nd/data/student.csv)
 
 ## SQL 동작 규칙
 
@@ -178,6 +129,32 @@ SELECT * FROM 학생;
 SELECT id, name FROM 학생;
 SELECT name, age FROM 학생 WHERE department = '컴퓨터공학과';
 SELECT * FROM 학생 WHERE id = 1000;
+```
+
+## 데모 시연
+
+SQL 파서 REPL을 실행한 뒤 아래 순서로 입력합니다.
+
+```bash
+./build/bin/sqlparser
+```
+
+먼저 테스트 대상 레코드를 삽입합니다.
+
+```sql
+INSERT INTO student (department, student_number, name, age) VALUES ('경제학과', '2026005', '김금융', 21);
+```
+
+입력된 결과를 일반 컬럼 조건으로 확인합니다.
+
+```sql
+SELECT id, department, student_number, name, age FROM student WHERE name = '김금융';
+```
+
+B+ Tree 인덱스 조회 비교용으로 `id` 조건 조회를 실행합니다.
+
+```sql
+SELECT id, department, student_number, name, age FROM student WHERE id = 101014;
 ```
 
 ## 조회 성능 비교
@@ -230,8 +207,6 @@ Indexed query avg time: 0.085954 sec
 Linear query avg time: 0.224854 sec
 ```
 
-100회 반복 측정 결과 캡처:
-
 - 아래 이미지는 1,000,000건 데이터셋에서 `WHERE id = ...` 인덱스 조회와 일반 컬럼 조건 조회를 비교한 실제 측정 결과입니다.
 - 단일 CLI 첫 실행은 인덱스 재구성 비용이 섞일 수 있으므로, 발표에서는 `query-only` 기준 평균 시간을 해석하는 것이 맞습니다.
 - 시연은 `10`회 반복으로 빠르게 보여주고, 아래 `100`회 반복 결과는 참고 자료로 함께 제시합니다.
@@ -240,28 +215,6 @@ Linear query avg time: 0.224854 sec
 - `benchmark_runner` 실행 전에는 `make benchmark`를 먼저 실행해야 최신 바이너리를 사용할 수 있습니다.
 - Windows 시연에서는 PowerShell 또는 Windows Terminal을 사용하는 편이 안정적이고, 한글이 깨지면 UTF-8 코드페이지 설정을 먼저 확인하세요.
 
-![Indexing Result Comparison](docs/images/select-comparison-highlighted-2.png)
-
-출력:
-
-- `prepare`
-  - 삽입한 행 수
-  - 전체 삽입 시간
-- `query-only`
-  - 조회 대상 `id`
-  - 비교에 사용할 일반 컬럼 이름과 값
-  - 반복 조회 횟수
-  - `WHERE id = ...` 인덱스 조회 평균 시간
-  - 일반 컬럼 `WHERE ...` 선형 조회 평균 시간
-
-주의:
-
-- `prepare`는 시작 시 지정한 CSV를 헤더만 남기고 초기화한 뒤 같은 입력 파라미터로 같은 데이터셋을 다시 생성합니다.
-- `query-only`는 이미 준비된 데이터셋을 그대로 사용하며, CSV를 다시 초기화하지 않습니다.
-- 실데이터를 보호하려면 기본 샘플인 `benchmark-workdir/schema`, `benchmark-workdir/data`에서 실행하는 것이 좋습니다.
-- 기본 성능 비교 작업 디렉터리 샘플은 아래에 포함돼 있습니다.
-  - [benchmark-workdir/schema/student.meta](/C:/developer_folder/jungle-sql-processor-2nd/benchmark-workdir/schema/student.meta)
-  - [benchmark-workdir/data/student.csv](/C:/developer_folder/jungle-sql-processor-2nd/benchmark-workdir/data/student.csv)
 
 ## 이번 주 발표에서 강조할 포인트
 
