@@ -192,8 +192,8 @@ docker run --rm -v "C:/developer_folder/jungle-sql-processor-2nd:/workspace" -w 
 
 현재 테스트 러너 기준:
 
-- 상위 테스트 함수 `18개`
-- assertion `151개`
+- 상위 테스트 함수 `29개`
+- assertion `339개`
 
 실행:
 

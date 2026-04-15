@@ -19,5 +19,6 @@ int string_list_index_of(const StringList *list, const char *value);
 void string_list_free(StringList *list);
 char *build_path(const char *dir, const char *name, const char *extension);
 int parse_int_strict(const char *text, int *value);
+void format_system_error(char *error, size_t error_size, const char *action, const char *path);
 
 #endif

@@ -5,6 +5,7 @@
 #include <stdio.h>
 // free 함수를 쓰기 위해 포함한다.
 #include <stdlib.h>
+#include <string.h>
 
 // 현재 어느 토큰을 보고 있는지 관리하기 위한 내부 상태 구조체다.
 typedef struct {
@@ -15,6 +16,61 @@ typedef struct {
     // 에러 메시지를 채워 넣을 결과 구조체 주소다.
     ParseResult *result;
 } ParserState;
+
+static const Token *current_token(const ParserState *state);
+
+static const char *token_type_name(TokenType type) {
+    switch (type) {
+        case TOKEN_IDENTIFIER:
+            return "IDENTIFIER";
+        case TOKEN_STRING:
+            return "STRING";
+        case TOKEN_NUMBER:
+            return "NUMBER";
+        case TOKEN_STAR:
+            return "STAR";
+        case TOKEN_EQUALS:
+            return "EQUALS";
+        case TOKEN_COMMA:
+            return "COMMA";
+        case TOKEN_LPAREN:
+            return "LPAREN";
+        case TOKEN_RPAREN:
+            return "RPAREN";
+        case TOKEN_SEMICOLON:
+            return "SEMICOLON";
+        case TOKEN_END:
+            return "EOF";
+    }
+
+    return "UNKNOWN";
+}
+
+static void describe_token(const Token *token, char *buffer, size_t buffer_size) {
+    if (token->type == TOKEN_END) {
+        snprintf(buffer, buffer_size, "EOF at position %d", token->position);
+        return;
+    }
+
+    if (token->text != NULL && token->text[0] != '\0') {
+        snprintf(buffer, buffer_size, "%s(\"%s\") at position %d", token_type_name(token->type), token->text, token->position);
+        return;
+    }
+
+    snprintf(buffer, buffer_size, "%s at position %d", token_type_name(token->type), token->position);
+}
+
+static void set_expected_token_error(ParserState *state, const char *expected) {
+    char token_description[128];
+
+    describe_token(current_token(state), token_description, sizeof(token_description));
+    if (strncmp(expected, "expected ", 9) == 0 || strncmp(expected, "unexpected ", 11) == 0) {
+        snprintf(state->result->message, sizeof(state->result->message), "%s, got %s", expected, token_description);
+        return;
+    }
+
+    snprintf(state->result->message, sizeof(state->result->message), "expected %s, got %s", expected, token_description);
+}
 
 static const Token *current_token(const ParserState *state) {
     // 현재 위치의 토큰 주소를 바로 반환한다.
@@ -36,7 +92,7 @@ static int expect_type(ParserState *state, TokenType type, const char *message) 
     // 기대한 토큰이 맞으면 통과시킨다.
     if (!match_type(state, type)) {
         // 다르면 결과 구조체에 사람이 읽을 메시지를 남긴다.
-        snprintf(state->result->message, sizeof(state->result->message), "%s", message);
+        set_expected_token_error(state, message);
         return 0;
     }
 
@@ -49,7 +105,9 @@ static int expect_keyword(ParserState *state, const char *keyword) {
 
     // 식별자 토큰이 아니거나, 기대한 키워드와 다르면 실패다.
     if (token->type != TOKEN_IDENTIFIER || !strings_equal_ignore_case(token->text, keyword)) {
-        snprintf(state->result->message, sizeof(state->result->message), "expected keyword %s", keyword);
+        char expected[64];
+        snprintf(expected, sizeof(expected), "keyword %s", keyword);
+        set_expected_token_error(state, expected);
         return 0;
     }
 
@@ -64,7 +122,7 @@ static int parse_identifier(ParserState *state, char **value) {
 
     // 테이블명이나 컬럼명은 반드시 식별자여야 한다.
     if (token->type != TOKEN_IDENTIFIER) {
-        snprintf(state->result->message, sizeof(state->result->message), "expected identifier");
+        set_expected_token_error(state, "identifier");
         return 0;
     }
 
@@ -124,7 +182,7 @@ static int parse_value_list(ParserState *state, StringList *list) {
     token = current_token(state);
     // 현재 구현에서는 문자열, 숫자, 식별자만 값으로 허용한다.
     if (token->type != TOKEN_STRING && token->type != TOKEN_NUMBER && token->type != TOKEN_IDENTIFIER) {
-        snprintf(state->result->message, sizeof(state->result->message), "expected SQL value");
+        set_expected_token_error(state, "SQL value");
         return 0;
     }
 
@@ -140,7 +198,7 @@ static int parse_value_list(ParserState *state, StringList *list) {
     while (match_type(state, TOKEN_COMMA)) {
         token = current_token(state);
         if (token->type != TOKEN_STRING && token->type != TOKEN_NUMBER && token->type != TOKEN_IDENTIFIER) {
-            snprintf(state->result->message, sizeof(state->result->message), "expected SQL value");
+            set_expected_token_error(state, "SQL value");
             return 0;
         }
 
@@ -158,7 +216,7 @@ static int parse_condition_value(ParserState *state, char **value) {
     const Token *token = current_token(state);
 
     if (token->type != TOKEN_STRING && token->type != TOKEN_NUMBER && token->type != TOKEN_IDENTIFIER) {
-        snprintf(state->result->message, sizeof(state->result->message), "expected SQL value in WHERE clause");
+        set_expected_token_error(state, "SQL value in WHERE clause");
         return 0;
     }
 
@@ -297,7 +355,11 @@ ParseResult parse_statement(const TokenArray *tokens) {
         }
     } else {
         // 현재 버전은 INSERT와 SELECT만 허용한다.
-        snprintf(result.message, sizeof(result.message), "only INSERT and SELECT are supported");
+        {
+            char token_description[128];
+            describe_token(current_token(&state), token_description, sizeof(token_description));
+            snprintf(result.message, sizeof(result.message), "only INSERT and SELECT are supported, got %s", token_description);
+        }
         return result;
     }
 

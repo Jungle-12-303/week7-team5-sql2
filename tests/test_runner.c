@@ -16,14 +16,21 @@
 #ifdef _WIN32
 #include <direct.h>
 #define MAKE_DIR(path) _mkdir(path)
+#define CLI_BINARY_PATH ".\\build\\bin\\sqlparser.exe"
+#define SYSTEM_EXIT_CODE(status) (status)
 #else
 #include <sys/stat.h>
+#include <sys/wait.h>
 #define MAKE_DIR(path) mkdir(path, 0755)
+#define CLI_BINARY_PATH "./build/bin/sqlparser"
+#define SYSTEM_EXIT_CODE(status) (WIFEXITED(status) ? WEXITSTATUS(status) : (status))
 #endif
 
 static int tests_run = 0;
 static int tests_failed = 0;
 static int temp_dir_counter = 0;
+
+static void build_child_path(char *buffer, size_t size, const char *root, const char *child);
 
 static void expect_true(int condition, const char *name) {
     tests_run++;
@@ -47,6 +54,78 @@ static int write_text_file(const char *path, const char *content) {
 
     fputs(content, file);
     fclose(file);
+    return 1;
+}
+
+static int run_cli_command(const char *root, const char *arguments, const char *stdin_text,
+                           char *stdout_text, size_t stdout_size,
+                           char *stderr_text, size_t stderr_size,
+                           int *exit_code) {
+    char stdout_path[192];
+    char stderr_path[192];
+    char stdin_path[192];
+    char command[1024];
+    char error[256];
+    char *stdout_file_text;
+    char *stderr_file_text;
+    int status;
+
+    build_child_path(stdout_path, sizeof(stdout_path), root, "cli_stdout.txt");
+    build_child_path(stderr_path, sizeof(stderr_path), root, "cli_stderr.txt");
+    build_child_path(stdin_path, sizeof(stdin_path), root, "cli_stdin.txt");
+
+    if (!write_text_file(stdout_path, "") || !write_text_file(stderr_path, "")) {
+        return 0;
+    }
+
+    if (stdin_text != NULL && !write_text_file(stdin_path, stdin_text)) {
+        return 0;
+    }
+
+#ifdef _WIN32
+    if (stdin_text != NULL) {
+        snprintf(command, sizeof(command),
+                 "cmd /c \"\"%s\" %s < \"%s\" > \"%s\" 2> \"%s\"\"",
+                 CLI_BINARY_PATH, arguments, stdin_path, stdout_path, stderr_path);
+    } else {
+        snprintf(command, sizeof(command),
+                 "cmd /c \"\"%s\" %s > \"%s\" 2> \"%s\"\"",
+                 CLI_BINARY_PATH, arguments, stdout_path, stderr_path);
+    }
+#else
+    if (stdin_text != NULL) {
+        snprintf(command, sizeof(command),
+                 "\"%s\" %s < \"%s\" > \"%s\" 2> \"%s\"",
+                 CLI_BINARY_PATH, arguments, stdin_path, stdout_path, stderr_path);
+    } else {
+        snprintf(command, sizeof(command),
+                 "\"%s\" %s > \"%s\" 2> \"%s\"",
+                 CLI_BINARY_PATH, arguments, stdout_path, stderr_path);
+    }
+#endif
+
+    status = system(command);
+    if (status < 0) {
+        return 0;
+    }
+
+    stdout_file_text = read_entire_file(stdout_path, error, sizeof(error));
+    if (stdout_file_text == NULL) {
+        return 0;
+    }
+
+    stderr_file_text = read_entire_file(stderr_path, error, sizeof(error));
+    if (stderr_file_text == NULL) {
+        free(stdout_file_text);
+        return 0;
+    }
+
+    snprintf(stdout_text, stdout_size, "%s", stdout_file_text);
+    snprintf(stderr_text, stderr_size, "%s", stderr_file_text);
+    *exit_code = SYSTEM_EXIT_CODE(status);
+
+    free(stdout_file_text);
+    free(stderr_file_text);
     return 1;
 }
 
@@ -175,6 +254,27 @@ static void test_parser_where(void) {
     free_tokens(&tokens);
 }
 
+static void test_parser_error_details(void) {
+    TokenArray tokens = {0};
+    ParseResult result;
+    char error[256];
+
+    expect_true(lex_sql("SELECT , name FROM users;", &tokens, error, sizeof(error)), "lexer parses malformed SELECT for parser detail");
+    result = parse_statement(&tokens);
+    expect_true(!result.ok, "parser rejects missing SELECT column");
+    expect_true(strstr(result.message, "expected identifier, got COMMA(\",\") at position") != NULL, "parser error includes actual token for missing identifier");
+    free_tokens(&tokens);
+
+    tokens.items = NULL;
+    tokens.count = 0;
+    tokens.capacity = 0;
+    expect_true(lex_sql("SELECT name users;", &tokens, error, sizeof(error)), "lexer parses malformed SELECT missing FROM");
+    result = parse_statement(&tokens);
+    expect_true(!result.ok, "parser rejects missing FROM keyword");
+    expect_true(strstr(result.message, "expected keyword FROM, got IDENTIFIER(\"users\") at position") != NULL, "parser error includes actual token for missing keyword");
+    free_tokens(&tokens);
+}
+
 static void test_parser_utf8_identifiers(void) {
     TokenArray tokens = {0};
     ParseResult result;
@@ -188,6 +288,81 @@ static void test_parser_utf8_identifiers(void) {
         free_statement(&result.statement);
     }
     free_tokens(&tokens);
+}
+
+static void test_cli_error_messages(void) {
+    char root[128];
+    char schema_dir[160];
+    char data_dir[160];
+    char stdout_text[2048];
+    char stderr_text[4096];
+    int exit_code;
+
+    reset_runtime_state();
+    expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create CLI error test directories");
+
+    expect_true(run_cli_command(root, "-e \"SELECT\"", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with incomplete SELECT");
+    expect_true(exit_code != 0, "CLI returns non-zero for incomplete SELECT");
+    expect_true(strstr(stderr_text, "error: expected identifier, got EOF at position") != NULL, "CLI reports incomplete SELECT with EOF detail");
+    expect_true(stdout_text[0] == '\0', "CLI incomplete SELECT does not print stdout");
+
+    expect_true(run_cli_command(root, "-e \"DROP TABLE users;\"", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with unsupported SQL command");
+    expect_true(exit_code != 0, "CLI returns non-zero for unsupported SQL command");
+    expect_true(strstr(stderr_text, "error: only INSERT and SELECT are supported, got IDENTIFIER(\"DROP\") at position 0") != NULL, "CLI reports unsupported SQL command with token detail");
+
+    expect_true(run_cli_command(root, "-e \"SELECT name FROM users\"", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with missing semicolon");
+    expect_true(exit_code != 0, "CLI returns non-zero for missing semicolon");
+    expect_true(strstr(stderr_text, "error: expected ';' at end of SQL statement, got EOF at position") != NULL, "CLI reports missing semicolon with EOF detail");
+
+    expect_true(run_cli_command(root, "-e \"\"", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with empty SQL");
+    expect_true(exit_code != 0, "CLI returns non-zero for empty SQL");
+    expect_true(strstr(stderr_text, "error: missing SQL statement") != NULL, "CLI reports empty SQL as missing SQL statement");
+
+    expect_true(run_cli_command(root, "-e \"   \"", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with whitespace SQL");
+    expect_true(exit_code != 0, "CLI returns non-zero for whitespace SQL");
+    expect_true(strstr(stderr_text, "error: missing SQL statement") != NULL, "CLI reports whitespace SQL as missing SQL statement");
+
+    expect_true(run_cli_command(root, "-f", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with missing file path");
+    expect_true(exit_code != 0, "CLI returns non-zero for missing file path");
+    expect_true(strstr(stderr_text, "error: missing file path after -f") != NULL, "CLI reports missing file path after -f");
+    expect_true(strstr(stderr_text, "Usage:") != NULL, "CLI prints usage after missing file path");
+
+    expect_true(run_cli_command(root, "-f build/tests/does_not_exist/query.sql", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with missing SQL file");
+    expect_true(exit_code != 0, "CLI returns non-zero for missing SQL file");
+    expect_true(strstr(stderr_text, "error: failed to open SQL file 'build/tests/does_not_exist/query.sql'") != NULL, "CLI reports missing SQL file path");
+    expect_true(strstr(stderr_text, "Usage:") != NULL, "CLI prints usage after missing SQL file");
+
+    expect_true(run_cli_command(root, "--bogus", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with unknown option");
+    expect_true(exit_code != 0, "CLI returns non-zero for unknown option");
+    expect_true(strstr(stderr_text, "error: unknown option: --bogus") != NULL, "CLI reports unknown option directly");
+    expect_true(strstr(stderr_text, "Usage:") != NULL, "CLI prints usage after unknown option");
+
+    expect_true(run_cli_command(root, "-f -", "SELECT", stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with invalid stdin SQL");
+    expect_true(exit_code != 0, "CLI returns non-zero for invalid stdin SQL");
+    expect_true(strstr(stderr_text, "error: expected identifier, got EOF at position") != NULL, "CLI reports invalid stdin SQL with parser detail");
+}
+
+static void test_cli_bare_directory_argument_is_not_sql(void) {
+    char root[128];
+    char schema_dir[160];
+    char data_dir[160];
+    char directory_path[192];
+    char arguments[256];
+    char stdout_text[2048];
+    char stderr_text[4096];
+    int exit_code;
+
+    reset_runtime_state();
+    expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create bare directory CLI test directories");
+    build_child_path(directory_path, sizeof(directory_path), root, "not_sql_dir");
+    expect_true(MAKE_DIR(directory_path) == 0, "create bare directory CLI argument");
+    snprintf(arguments, sizeof(arguments), "\"%s\"", directory_path);
+
+    expect_true(run_cli_command(root, arguments, NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with bare directory argument");
+    expect_true(exit_code != 0, "CLI returns non-zero for bare directory argument");
+    expect_true(strstr(stderr_text, "error: path is a directory, not a SQL file: ") != NULL, "CLI reports bare directory argument as file path error");
+    expect_true(strstr(stderr_text, directory_path) != NULL, "CLI includes bare directory path in error");
+    expect_true(strstr(stderr_text, "Usage:") != NULL, "CLI prints usage after bare directory argument error");
 }
 
 static void test_schema_loading_with_alias_filename(void) {
@@ -211,6 +386,33 @@ static void test_schema_loading_with_alias_filename(void) {
         expect_true(strcmp(result.schema.storage_name, "student") == 0, "load schema keeps alias storage name");
         free_schema(&result.schema);
     }
+}
+
+static void test_schema_reports_missing_directory(void) {
+    SchemaResult result;
+
+    reset_runtime_state();
+    result = load_schema("build/tests/does_not_exist/schema", "build/tests/does_not_exist/data", "users");
+    expect_true(!result.ok, "load_schema fails for missing schema directory");
+    expect_true(strstr(result.message, "failed to open schema directory 'build/tests/does_not_exist/schema'") != NULL, "load_schema reports missing schema directory path");
+}
+
+static void test_schema_reports_alias_candidate_open_failure(void) {
+    char root[128];
+    char schema_dir[160];
+    char data_dir[160];
+    char blocked_meta_path[192];
+    SchemaResult result;
+
+    reset_runtime_state();
+    expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create alias candidate failure test directories");
+    build_child_path(blocked_meta_path, sizeof(blocked_meta_path), schema_dir, "blocked.meta");
+    expect_true(MAKE_DIR(blocked_meta_path) == 0, "create blocked meta directory");
+
+    result = load_schema(schema_dir, data_dir, "users");
+    expect_true(!result.ok, "load_schema fails when alias candidate meta cannot be opened");
+    expect_true(strstr(result.message, "failed to open schema meta file") != NULL, "load_schema reports alias candidate open failure");
+    expect_true(strstr(result.message, "blocked.meta") != NULL, "load_schema includes alias candidate path in error");
 }
 
 static void test_insert_auto_id(void) {
@@ -675,6 +877,23 @@ static void test_csv_escape(void) {
     string_list_free(&row);
 }
 
+static void test_storage_reports_missing_table_file(void) {
+    StorageReadResult result;
+
+    reset_runtime_state();
+    result = read_row_at_offset_csv("build/tests/does_not_exist/data", "users", 0);
+    expect_true(!result.ok, "read_row_at_offset_csv fails for missing table file");
+    expect_true(strstr(result.message, "failed to open table file 'build/tests/does_not_exist/data/users.csv'") != NULL, "storage error reports missing table file path");
+}
+
+static void test_read_entire_file_reports_missing_sql_file(void) {
+    char error[256];
+    char *contents = read_entire_file("build/tests/does_not_exist/query.sql", error, sizeof(error));
+
+    expect_true(contents == NULL, "read_entire_file fails for missing SQL file");
+    expect_true(strstr(error, "failed to open SQL file 'build/tests/does_not_exist/query.sql'") != NULL, "read_entire_file reports missing SQL file path");
+}
+
 static void test_storage_row_offset_roundtrip(void) {
     StringList row = {0};
     char root[128];
@@ -810,8 +1029,13 @@ int main(void) {
     test_bptree_insert_and_search();
     test_bptree_split_preserves_searchability();
     test_parser_where();
+    test_parser_error_details();
     test_parser_utf8_identifiers();
+    test_cli_error_messages();
+    test_cli_bare_directory_argument_is_not_sql();
     test_schema_loading_with_alias_filename();
+    test_schema_reports_missing_directory();
+    test_schema_reports_alias_candidate_open_failure();
     test_insert_auto_id();
     test_insert_overrides_user_id();
     test_select_execution_with_general_where();
@@ -826,6 +1050,8 @@ int main(void) {
     test_insert_requires_id_column();
     test_select_where_id_requires_id_column();
     test_csv_escape();
+    test_storage_reports_missing_table_file();
+    test_read_entire_file_reports_missing_sql_file();
     test_storage_row_offset_roundtrip();
     test_insert_failure_recovers_via_rebuild();
     test_benchmark_main_resets_dataset();

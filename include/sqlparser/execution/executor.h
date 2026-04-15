@@ -18,5 +18,6 @@ typedef struct {
 
 // 파싱된 Statement를 실제 파일 기반 DB 동작으로 실행한다.
 ExecResult execute_statement(const Statement *statement, const char *schema_dir, const char *data_dir, FILE *out);
+void execution_runtime_reset(void);
 
 #endif

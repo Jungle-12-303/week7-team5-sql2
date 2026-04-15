@@ -8,8 +8,8 @@
 
 현재 기준 테스트 규모는 아래와 같다.
 
-- 현재 상위 테스트 함수 수: `22개`
-- 현재 assertion 수: `283개`
+- 현재 상위 테스트 함수 수: `29개`
+- 현재 assertion 수: `339개`
 - 이전 보강 전 기준: 상위 테스트 함수 `12개`, assertion `110개`
 
 ## 2. 테스트 실행 방법
@@ -50,6 +50,7 @@ make test
 
 대상 함수:
 - `test_parser_where`
+- `test_parser_error_details`
 - `test_parser_utf8_identifiers`
 
 검증 내용:
@@ -66,10 +67,13 @@ make test
 
 대상 함수:
 - `test_schema_loading_with_alias_filename`
+- `test_schema_reports_missing_directory`
+- `test_schema_reports_alias_candidate_open_failure`
 
 검증 내용:
 - 파일명과 테이블명이 달라도 `table=` 선언을 기준으로 스키마를 찾을 수 있다.
 - 별칭 테이블명과 실제 저장 파일명을 함께 유지한다.
+- 별칭 스키마 탐색 중 후보 meta 파일을 열 수 없으면 실제 파일 열기 오류를 노출한다.
 
 연관 요구사항:
 - `schema/*.meta` + `data/*.csv` 기반 파일 저장
@@ -139,6 +143,8 @@ make test
 ### 3.8 오류 처리 테스트
 
 대상 함수:
+- `test_cli_error_messages`
+- `test_cli_bare_directory_argument_is_not_sql`
 - `test_invalid_where_id_value`
 - `test_invalid_where_id_value_no_header_output`
 - `test_invalid_rebuild_data`
@@ -148,6 +154,8 @@ make test
 - `test_select_where_id_requires_id_column`
 
 검증 내용:
+- `SELECT`만 입력한 경우, 지원하지 않는 명령어, 세미콜론 누락, 빈 입력, 알 수 없는 옵션 등 CLI 경계값 입력에서 실제 오류 유형에 맞는 메시지를 출력한다.
+- bare argument가 디렉터리일 때 SQL 문자열로 오인하지 않고 파일 경로 오류로 처리한다.
 - `WHERE id = abc`처럼 정수가 아닌 값은 오류 처리한다.
 - `WHERE id = abc` 오류 시 헤더를 먼저 출력하지 않는다.
 - CSV 재구성 중 중복 `id`를 만나면 오류 처리한다.
@@ -157,6 +165,8 @@ make test
 - `id` 컬럼이 없는 테이블은 `WHERE id` 인덱스 조회 대상으로 사용할 수 없다.
 
 연관 요구사항:
+- CLI 예외 입력에 대한 세부 오류 메시지
+- 파일 경로 입력과 SQL 문자열 입력의 정확한 구분
 - `WHERE id` 정수 검증
 - 재구성 중 중복/비정상 `id` 오류 정책
 
@@ -164,6 +174,8 @@ make test
 
 대상 함수:
 - `test_csv_escape`
+- `test_storage_reports_missing_table_file`
+- `test_read_entire_file_reports_missing_sql_file`
 - `test_storage_row_offset_roundtrip`
 
 검증 내용:
@@ -197,7 +209,6 @@ make test
 
 현재 테스트에 포함되지 않았거나, 별도 보강 여지가 있는 항목은 아래와 같다.
 
-- 인덱스 등록 실패 직후 무효화 후 재구성 복구를 강제로 유도하는 테스트
 - 대량 삽입 후 인덱스 조회와 선형 조회의 성능 비교 자동 검증
 
 ## 5. 요약

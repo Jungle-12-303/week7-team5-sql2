@@ -40,7 +40,7 @@ $(TEST_BIN): $(TEST_SOURCES) | $(BIN_DIR)
 $(BENCHMARK_BIN): $(BENCHMARK_SOURCES) | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $(BENCHMARK_SOURCES)
 
-test: $(TEST_BIN)
+test: $(APP_BIN) $(TEST_BIN)
 	./$(TEST_BIN)
 
 benchmark: $(BENCHMARK_BIN)

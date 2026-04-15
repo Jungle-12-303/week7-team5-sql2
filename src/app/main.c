@@ -8,22 +8,31 @@
 #include "sqlparser/sql/parser.h"
 // 파일 읽기와 문자열 복사 같은 공통 유틸 함수를 쓰기 위한 선언입니다.
 #include "sqlparser/common/util.h"
-#include "sqlparser/index/table_index.h"
 
 #include <ctype.h>
+#include <errno.h>
 // 표준 입출력과 fopen을 사용합니다.
 #include <stdio.h>
 // free, malloc 같은 메모리 함수들을 사용합니다.
 #include <stdlib.h>
 // strlen, memcpy 같은 문자열 함수를 사용합니다.
 #include <string.h>
+#include <sys/stat.h>
 
 #ifdef _MSC_VER
 #include <io.h>
 #define ISATTY _isatty
+#define STAT_STRUCT struct _stat
+#define STAT_FUNC _stat
+#define IS_REGULAR_FILE(mode) (((mode) & _S_IFMT) == _S_IFREG)
+#define IS_DIRECTORY_FILE(mode) (((mode) & _S_IFMT) == _S_IFDIR)
 #else
 #include <unistd.h>
 #define ISATTY isatty
+#define STAT_STRUCT struct stat
+#define STAT_FUNC stat
+#define IS_REGULAR_FILE(mode) S_ISREG(mode)
+#define IS_DIRECTORY_FILE(mode) S_ISDIR(mode)
 #endif
 
 // 전달받은 인자가 실제 파일 경로인지 간단히 검사합니다.
@@ -40,6 +49,38 @@ static int file_exists(const char *path) {
     }
 
     // 열지 못했으면 파일이 없다고 봅니다.
+    return 0;
+}
+
+static int resolve_bare_argument_file(const char *path, int *should_read_file, char *error, size_t error_size) {
+    STAT_STRUCT info;
+
+    *should_read_file = 0;
+    if (file_exists(path)) {
+        *should_read_file = 1;
+        return 1;
+    }
+
+    if (STAT_FUNC(path, &info) == 0) {
+        if (IS_DIRECTORY_FILE(info.st_mode)) {
+            snprintf(error, error_size, "path is a directory, not a SQL file: %s", path);
+            return 0;
+        }
+
+        if (!IS_REGULAR_FILE(info.st_mode)) {
+            snprintf(error, error_size, "path is not a regular file: %s", path);
+            return 0;
+        }
+
+        format_system_error(error, error_size, "failed to access SQL file", path);
+        return 0;
+    }
+
+    if (errno == ENOENT || errno == ENOTDIR || errno == EILSEQ) {
+        return 1;
+    }
+
+    format_system_error(error, error_size, "failed to access SQL path", path);
     return 0;
 }
 
@@ -171,7 +212,17 @@ static char *read_stream(FILE *stream, char *error, size_t error_size) {
 
 // 파일 경로인지 SQL 문자열인지 판단해 실제 SQL 본문을 읽어 옵니다.
 static char *load_sql_from_argument(const char *value, int force_file, char *error, size_t error_size) {
-    if (force_file || file_exists(value)) {
+    int should_read_file = 0;
+
+    if (force_file) {
+        return read_entire_file(value, error, error_size);
+    }
+
+    if (!resolve_bare_argument_file(value, &should_read_file, error, error_size)) {
+        return NULL;
+    }
+
+    if (should_read_file) {
         return read_entire_file(value, error, error_size);
     }
 
@@ -194,7 +245,7 @@ static void print_usage(FILE *stream, const char *program_name) {
     fprintf(stream, "\n");
     fprintf(stream, "Examples:\n");
     fprintf(stream, "  %s -e \"SELECT * FROM student;\"\n", program_name);
-    fprintf(stream, "  %s -f examples/select_students.sql\n", program_name);
+    fprintf(stream, "  %s -f examples/select_name_age.sql\n", program_name);
     fprintf(stream, "  echo \"SELECT name FROM student;\" | %s\n", program_name);
 }
 
@@ -339,6 +390,11 @@ static char *load_noninteractive_sql(int argc, char *argv[], char *error, size_t
         return read_entire_file(argv[2], error, error_size);
     }
 
+    if (argv[1][0] == '-' && strcmp(argv[1], "-") != 0) {
+        snprintf(error, error_size, "unknown option: %s", argv[1]);
+        return NULL;
+    }
+
     if (argc == 2 && strcmp(argv[1], "-") == 0) {
         return read_stream(stdin, error, error_size);
     }
@@ -358,32 +414,32 @@ int main(int argc, char *argv[]) {
 
     if (argc == 1 && stdin_is_interactive()) {
         exit_code = run_repl(stdout, stderr);
-        table_index_registry_reset();
+        execution_runtime_reset();
         return exit_code;
     }
 
     sql_text = load_noninteractive_sql(argc, argv, error, sizeof(error), &show_help);
     if (show_help) {
         print_usage(stdout, argv[0]);
-        table_index_registry_reset();
+        execution_runtime_reset();
         return 0;
     }
 
     if (sql_text == NULL) {
         fprintf(stderr, "error: %s\n", error);
         print_usage(stderr, argv[0]);
-        table_index_registry_reset();
+        execution_runtime_reset();
         return 1;
     }
 
     if (!execute_sql_text(sql_text, stdout, error, sizeof(error))) {
         fprintf(stderr, "error: %s\n", error);
         free(sql_text);
-        table_index_registry_reset();
+        execution_runtime_reset();
         return 1;
     }
 
     free(sql_text);
-    table_index_registry_reset();
+    execution_runtime_reset();
     return 0;
 }

@@ -37,11 +37,13 @@ static FILE *open_table_file(const char *data_dir, const char *table_name, const
     }
 
     file = fopen(path, mode);
-    free(path);
     if (file == NULL) {
-        snprintf(error, error_size, "failed to open table file");
+        format_system_error(error, error_size, "failed to open table file", path);
+        free(path);
         return NULL;
     }
+
+    free(path);
 
     return file;
 }

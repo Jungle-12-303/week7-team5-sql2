@@ -79,14 +79,14 @@ static int build_insert_row(const InsertStatement *statement, const Schema *sche
         if (schema_index < 0) {
             free(assigned);
             string_list_free(row_values);
-            snprintf(message, message_size, "unknown column in INSERT");
+            snprintf(message, message_size, "unknown column in INSERT: %s", statement->columns.items[value_index]);
             return 0;
         }
 
         if (assigned[schema_index]) {
             free(assigned);
             string_list_free(row_values);
-            snprintf(message, message_size, "duplicate column in INSERT");
+            snprintf(message, message_size, "duplicate column in INSERT: %s", statement->columns.items[value_index]);
             return 0;
         }
 
@@ -349,14 +349,16 @@ static ExecResult execute_select(const SelectStatement *statement, const char *s
     }
 
     file = fopen(path, "rb");
-    free(path);
     if (file == NULL) {
         free(selected_indexes);
         string_list_free(&headers);
         free_schema(&schema_result.schema);
-        set_exec_error(&result, "failed to open table data");
+        format_system_error(result.message, sizeof(result.message), "failed to open table data file", path);
+        free(path);
+        result.ok = 0;
         return result;
     }
+    free(path);
 
     if (fgets(line, sizeof(line), file) == NULL) {
         fclose(file);
@@ -420,4 +422,8 @@ ExecResult execute_statement(const Statement *statement, const char *schema_dir,
     }
 
     return execute_select(&statement->as.select_statement, schema_dir, data_dir, out);
+}
+
+void execution_runtime_reset(void) {
+    table_index_registry_reset();
 }

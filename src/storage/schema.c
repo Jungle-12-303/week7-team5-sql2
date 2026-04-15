@@ -6,6 +6,7 @@
 
 // 스키마 디렉터리 안의 meta 파일을 탐색하기 위해 포함한다.
 #include <dirent.h>
+#include <errno.h>
 // 파일 읽기와 메시지 생성을 위해 포함한다.
 #include <stdio.h>
 // free 함수를 쓰기 위해 포함한다.
@@ -91,7 +92,7 @@ static int has_meta_extension(const char *filename) {
     return strcmp(filename + length - 5, ".meta") == 0;
 }
 
-static int file_declares_table(const char *path, const char *table_name) {
+static int file_declares_table(const char *path, const char *table_name, int *matches, char *message, size_t message_size) {
     // meta 파일을 읽을 핸들이다.
     FILE *file;
     // 한 줄씩 읽을 버퍼다.
@@ -101,10 +102,11 @@ static int file_declares_table(const char *path, const char *table_name) {
     // key=value 구분 위치다.
     char *separator;
     // 일치 여부를 담는 플래그다.
-    int matches = 0;
+    *matches = 0;
 
     file = fopen(path, "rb");
     if (file == NULL) {
+        format_system_error(message, message_size, "failed to open schema meta file", path);
         return 0;
     }
 
@@ -125,13 +127,13 @@ static int file_declares_table(const char *path, const char *table_name) {
         separator = trim_whitespace(separator);
 
         if (strcmp(trimmed, "table") == 0 && strcmp(separator, table_name) == 0) {
-            matches = 1;
+            *matches = 1;
             break;
         }
     }
 
     fclose(file);
-    return matches;
+    return 1;
 }
 
 static char *find_schema_path(const char *schema_dir, const char *table_name, char *message, size_t message_size) {
@@ -154,16 +156,22 @@ static char *find_schema_path(const char *schema_dir, const char *table_name, ch
         fclose(file);
         return path;
     }
+    if (errno != ENOENT && errno != ENOTDIR && errno != EILSEQ) {
+        format_system_error(message, message_size, "failed to open schema meta file", path);
+        free(path);
+        return NULL;
+    }
     free(path);
 
     directory = opendir(schema_dir);
     if (directory == NULL) {
-        snprintf(message, message_size, "schema meta file does not exist");
+        format_system_error(message, message_size, "failed to open schema directory", schema_dir);
         return NULL;
     }
 
     while ((entry = readdir(directory)) != NULL) {
         char *candidate_path;
+        int matches = 0;
 
         if (!has_meta_extension(entry->d_name)) {
             continue;
@@ -176,7 +184,13 @@ static char *find_schema_path(const char *schema_dir, const char *table_name, ch
             return NULL;
         }
 
-        if (file_declares_table(candidate_path, table_name)) {
+        if (!file_declares_table(candidate_path, table_name, &matches, message, message_size)) {
+            free(candidate_path);
+            closedir(directory);
+            return NULL;
+        }
+
+        if (matches) {
             closedir(directory);
             return candidate_path;
         }
@@ -211,11 +225,12 @@ static int validate_csv_header(const char *data_dir, const char *storage_name, c
     // CSV 파일을 연다.
     file = fopen(path, "rb");
     // 경로 문자열은 더 이상 필요 없으므로 해제한다.
-    free(path);
     if (file == NULL) {
-        snprintf(message, message_size, "table data file does not exist");
+        format_system_error(message, message_size, "failed to open table data file", path);
+        free(path);
         return 0;
     }
+    free(path);
 
     // 첫 줄이 없으면 헤더가 없는 잘못된 파일이다.
     if (fgets(line, sizeof(line), file) == NULL) {
@@ -287,11 +302,13 @@ SchemaResult load_schema(const char *schema_dir, const char *data_dir, const cha
     // meta 파일을 연다.
     file = fopen(path, "rb");
     // 경로 문자열은 이제 필요 없으므로 해제한다.
-    free(path);
     if (file == NULL) {
-        set_schema_error(&result, "schema meta file does not exist");
+        format_system_error(result.message, sizeof(result.message), "failed to open schema meta file", path);
+        free(path);
+        result.ok = 0;
         return result;
     }
+    free(path);
 
     // meta 파일을 끝까지 한 줄씩 읽는다.
     while (fgets(line, sizeof(line), file) != NULL) {

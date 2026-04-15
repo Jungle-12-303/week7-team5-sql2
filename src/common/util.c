@@ -26,7 +26,7 @@ char *read_entire_file(const char *path, char *error, size_t error_size) {
     file = fopen(path, "rb");
     // 파일을 못 열면 원인을 메시지로 남기고 NULL을 반환한다.
     if (file == NULL) {
-        snprintf(error, error_size, "failed to open SQL file: %s", path);
+        format_system_error(error, error_size, "failed to open SQL file", path);
         return NULL;
     }
 
@@ -286,4 +286,19 @@ int parse_int_strict(const char *text, int *value) {
 
     *value = (int)parsed;
     return 1;
+}
+
+void format_system_error(char *error, size_t error_size, const char *action, const char *path) {
+    const char *reason = strerror(errno);
+
+    if (reason == NULL) {
+        reason = "unknown system error";
+    }
+
+    if (path == NULL || *path == '\0') {
+        snprintf(error, error_size, "%s: %s", action, reason);
+        return;
+    }
+
+    snprintf(error, error_size, "%s '%s': %s", action, path, reason);
 }
