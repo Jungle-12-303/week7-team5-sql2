@@ -23,14 +23,14 @@
 - 테이블별 메모리 B+ 트리 인덱스 유지
 - `WHERE id = <number>` 인덱스 조회
 - CSV 기준 인덱스 재구성
-- 1,000,000건 이상 삽입 가능한 벤치마크 진입점 제공
+- 1,000,000건 이상 삽입 가능한 성능 측정 진입점 제공
 - 단위 테스트 및 기능 테스트 작성
 
 ### 발표에서 보여줄 차별점
 
 - 기존 SQL 처리기를 버리지 않고 그대로 확장했다는 점
 - 일반 조회와 인덱스 조회가 코드 경로에서 명확히 분리된다는 점
-- 테스트와 벤치마크를 함께 준비해 결과물뿐 아니라 검증 과정도 보여줄 수 있다는 점
+- 테스트와 성능 비교를 함께 준비해 결과물뿐 아니라 검증 과정도 보여줄 수 있다는 점
 
 ## 시각 자료
 
@@ -89,7 +89,7 @@ CSV 기반 저장소는 구현이 단순하지만, 원하는 레코드를 찾으
 - SQL 문자열 직접 실행
 - REPL 실행
 - Docker/Linux 기준 빌드와 테스트
-- 별도 벤치마크 바이너리
+- 별도 성능 비교 바이너리
 
 ## 현재 제외 범위
 
@@ -181,63 +181,6 @@ SELECT name, age FROM 학생 WHERE department = '컴퓨터공학과';
 SELECT * FROM 학생 WHERE id = 1000;
 ```
 
-## 발표 시연 순서
-
-### 1. 기본 조회
-
-```bash
-./build/bin/sqlparser -e "SELECT * FROM 학생;"
-```
-
-### 2. 자동 ID 부여 INSERT
-
-```bash
-./build/bin/sqlparser -e "INSERT INTO 학생 (department, student_number, name, age) VALUES ('컴퓨터공학과', '2024001', '김민수', 20);"
-```
-
-### 3. 인덱스 조회
-
-```bash
-./build/bin/sqlparser -e "SELECT * FROM 학생 WHERE id = 1;"
-```
-
-### 3-1. 자동 부여된 내부 id 확인
-
-```bash
-./build/bin/sqlparser -e "SELECT id, name FROM 학생 WHERE id = 1;"
-```
-
-### 4. 일반 WHERE 조회
-
-```bash
-./build/bin/sqlparser -e "SELECT name FROM 학생 WHERE department = '컴퓨터공학과';"
-```
-
-### 5. 벤치마크 실행
-
-```bash
-./build/bin/benchmark_runner prepare benchmark-workdir/schema benchmark-workdir/data student 1000000
-./build/bin/benchmark_runner query-only benchmark-workdir/schema benchmark-workdir/data student 500000 10
-```
-
-설명:
-
-- `benchmark-workdir/schema`: 벤치마크 전용 스키마 폴더
-- `benchmark-workdir/data`: 벤치마크 전용 CSV 폴더
-- `student`: 벤치마크 대상 테이블 이름
-- `1000000`: prepare 모드에서 미리 생성하고 삽입할 레코드 수
-- `500000`: query-only 모드에서 조회 비교에 사용할 내부 PK 값
-- `10`: 발표 시연용 query-only 반복 횟수
-
-발표 시연에서는 `query-only` 반복 횟수를 `10`으로 두는 것을 권장합니다.
-이 정도면 평균값의 의미를 유지하면서도 결과가 너무 늦지 않게 출력됩니다.
-
-발표에서는 prepare로 100만 건 데이터셋을 미리 만들어 두고, 시연 시간에는 query-only로 조회 시간만 비교한 뒤 아래처럼 일반 CLI로 실제 조회 결과 표를 보여 주면 흐름이 자연스럽습니다.
-
-```bash
-./build/bin/sqlparser -e "SELECT id, department, student_number, name, age FROM 학생 WHERE id = 500000;"
-```
-
 ## 빌드
 
 Linux 또는 Docker 기준:
@@ -252,7 +195,7 @@ make all
 make test
 ```
 
-벤치마크 바이너리:
+성능 비교 바이너리:
 
 ```bash
 make benchmark
@@ -261,61 +204,6 @@ make benchmark
 - `make` 또는 `make all`은 기본 CLI 바이너리 `sqlparser`를 빌드합니다.
 - `benchmark_runner`까지 최신 코드로 다시 만들려면 `make benchmark`를 별도로 실행해야 합니다.
 - Windows 환경에 따라 `make` 대신 `mingw32-make`를 사용할 수 있습니다.
-
-## CLI 사용법
-
-도움말:
-
-```bash
-./build/bin/sqlparser --help
-```
-
-SQL 문자열 직접 실행:
-
-```bash
-./build/bin/sqlparser -e "SELECT * FROM 학생;"
-```
-
-출력 예시:
-
-```text
-+----------------+----------------+--------+-----+
-| department     | student_number | name   | age |
-+----------------+----------------+--------+-----+
-| 컴퓨터공학과   | 2024001        | 김민수 | 20  |
-+----------------+----------------+--------+-----+
-```
-
-내부 PK 확인 시연은 `SELECT id, ...` 형태를 사용합니다.
-
-```bash
-./build/bin/sqlparser -e "SELECT id, name FROM 학생 WHERE id = 1;"
-```
-
-SQL 파일 실행:
-
-```bash
-./build/bin/sqlparser -f path/to/query.sql
-```
-
-표준입력으로 실행:
-
-```bash
-echo "SELECT name FROM 학생;" | ./build/bin/sqlparser
-```
-
-REPL 실행:
-
-```bash
-./build/bin/sqlparser
-```
-
-REPL 종료 명령:
-
-- `.exit`
-- `.quit`
-- `exit`
-- `quit`
 
 ## Docker 사용 예시
 
@@ -337,40 +225,9 @@ docker run --rm -it -v "C:/developer_folder/jungle-sql-processor-2nd:/workspace"
 docker run --rm -v "C:/developer_folder/jungle-sql-processor-2nd:/workspace" -w /workspace jungle-sql-processor-test bash scripts/docker-test.sh
 ```
 
-## 테스트
+## 조회 성능 비교
 
-현재 테스트 러너 기준:
-
-- 상위 테스트 함수 `31개`
-- assertion `375개`
-
-실행:
-
-```bash
-bash scripts/docker-test.sh
-```
-
-또는:
-
-```bash
-make test
-```
-
-테스트 범위 요약:
-
-- B+ 트리 기본 삽입/검색/분할
-- `id` 자동 부여
-- `WHERE id` 인덱스 경로
-- 일반 `WHERE` 선형 탐색
-- 인덱스 재구성 및 오류 복구
-- CLI 경계값 및 오류 메시지
-- 벤치마크 데이터 재생성
-
-상세 목록은 [docs/test-cases.md](/C:/developer_folder/jungle-sql-processor-2nd/docs/test-cases.md)에 정리돼 있습니다.
-
-## 벤치마크
-
-벤치마크는 별도 바이너리로 실행하며, `prepare`와 `query-only` 두 모드를 지원합니다.
+조회 성능 비교는 별도 바이너리로 실행하며, `prepare`와 `query-only` 두 모드를 지원합니다.
 
 ```bash
 ./build/bin/benchmark_runner prepare <schema_dir> <data_dir> <table_name> <row_count>
@@ -386,8 +243,8 @@ make test
 
 인자 의미:
 
-- `<schema_dir>`: 벤치마크 대상 스키마 폴더
-- `<data_dir>`: 벤치마크 대상 CSV 폴더
+- `<schema_dir>`: 성능 비교 대상 스키마 폴더
+- `<data_dir>`: 성능 비교 대상 CSV 폴더
 - `<table_name>`: 대상 테이블 이름
 - `<row_count>`: `prepare` 모드에서 생성하고 삽입할 총 레코드 수
 - `<target_id>`: `query-only` 모드에서 인덱스 조회 대상으로 삼을 `id`
@@ -406,6 +263,17 @@ make benchmark
 
 - 더 안정적인 평균값이 필요하면 `query_repeat`를 `100`으로 올릴 수 있습니다.
 - 다만 선형 조회는 100만 건을 매번 순회하므로, `100`회 반복은 발표 시연용으로는 오래 걸릴 수 있습니다.
+
+실제 측정 결과:
+
+```text
+Query target id: 1000000
+Query target column: department
+Query target value: department_1000000
+Query repeats: 10
+Indexed query avg time: 0.085954 sec
+Linear query avg time: 0.224854 sec
+```
 
 100회 반복 측정 결과 캡처:
 
@@ -436,7 +304,7 @@ make benchmark
 - `prepare`는 시작 시 지정한 CSV를 헤더만 남기고 초기화한 뒤 같은 입력 파라미터로 같은 데이터셋을 다시 생성합니다.
 - `query-only`는 이미 준비된 데이터셋을 그대로 사용하며, CSV를 다시 초기화하지 않습니다.
 - 실데이터를 보호하려면 기본 샘플인 `benchmark-workdir/schema`, `benchmark-workdir/data`에서 실행하는 것이 좋습니다.
-- 기본 벤치마크 작업 디렉터리 샘플은 아래에 포함돼 있습니다.
+- 기본 성능 비교 작업 디렉터리 샘플은 아래에 포함돼 있습니다.
   - [benchmark-workdir/schema/student.meta](/C:/developer_folder/jungle-sql-processor-2nd/benchmark-workdir/schema/student.meta)
   - [benchmark-workdir/data/student.csv](/C:/developer_folder/jungle-sql-processor-2nd/benchmark-workdir/data/student.csv)
 
@@ -444,7 +312,7 @@ make benchmark
 
 - 이전 차수 코드를 버리지 않고 7주차 요구를 덧붙였는가
 - `WHERE id` 경로만 인덱스를 타도록 책임 분리가 되어 있는가
-- 벤치마크와 테스트를 통해 결과를 검증했는가
+- 성능 비교와 테스트를 통해 결과를 검증했는가
 - 구현한 코드를 팀원이 직접 설명할 수 있는가
 
 ## 참고 문서
