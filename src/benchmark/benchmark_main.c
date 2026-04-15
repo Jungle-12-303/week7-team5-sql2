@@ -2,10 +2,10 @@
  * benchmark/benchmark_main.c
  *
  * 이 파일은 일반 CLI와 분리된 성능 측정 전용 진입점이다.
- * 같은 스키마로 대량 INSERT를 수행한 뒤,
- * - WHERE id = ...
- * - 일반 컬럼 WHERE ...
- * 의 평균 조회 시간을 비교한다.
+ *
+ * 7주차 발표 흐름에 맞춰 두 모드를 지원한다.
+ * - prepare: 대량 데이터를 미리 생성하고 INSERT 시간만 측정
+ * - query-only: 이미 준비된 데이터셋을 그대로 사용해 조회 시간만 비교
  */
 #include "sqlparser/benchmark/benchmark.h"
 
@@ -152,76 +152,46 @@ static double run_query_benchmark(const Statement *statement, const char *schema
     return ((double)(clock() - started) / (double)CLOCKS_PER_SEC) / (double)repeat_count;
 }
 
-/*
- * 벤치마크 프로그램의 실제 메인 로직이다.
- *
- * 입력:
- * - schema_dir
- * - data_dir
- * - table_name
- * - row_count
- * - query_repeat(선택)
- *
- * 순서:
- * 1. schema 로딩
- * 2. CSV 초기화
- * 3. 대량 INSERT
- * 4. id 조회와 일반 컬럼 조회를 반복 측정
- * 5. 결과 출력
- */
-int benchmark_main(int argc, char *argv[]) {
-    const char *schema_dir;
-    const char *data_dir;
-    const char *table_name;
-    int row_count;
-    int query_repeat = 100;
+/* 스키마에서 id가 아닌 첫 번째 컬럼 이름을 찾는다. */
+static const char *find_first_non_id_column(const Schema *schema) {
+    int index;
+
+    for (index = 0; index < schema->columns.count; index++) {
+        if (strcmp(schema->columns.items[index], "id") != 0) {
+            return schema->columns.items[index];
+        }
+    }
+
+    return NULL;
+}
+
+/* prepare 모드 사용법을 출력한다. */
+static void print_prepare_usage(const char *program_name) {
+    fprintf(stderr, "Usage: %s prepare <schema_dir> <data_dir> <table_name> <row_count>\n", program_name);
+}
+
+/* query-only 모드 사용법을 출력한다. */
+static void print_query_usage(const char *program_name) {
+    fprintf(stderr, "Usage: %s query-only <schema_dir> <data_dir> <table_name> <target_id> [query_repeat]\n", program_name);
+}
+
+/* 명시적 모드 기반 전체 사용법을 출력한다. */
+static void print_benchmark_usage(const char *program_name) {
+    print_prepare_usage(program_name);
+    print_query_usage(program_name);
+}
+
+/* prepare 모드: CSV를 초기화하고 대량 INSERT를 수행한다. */
+static int run_prepare_mode(const char *schema_dir, const char *data_dir, const char *table_name, int row_count) {
     SchemaResult schema_result;
     Statement statement = {0};
-    Statement id_select = {0};
-    Statement other_select = {0};
     int index;
-    int target_id;
-    char id_text[32];
-    const char *other_column = NULL;
-    char *other_value = NULL;
     double insert_time;
-    double indexed_time;
-    double linear_time;
     clock_t insert_started;
-
-    if (argc != 5 && argc != 6) {
-        fprintf(stderr, "Usage: %s <schema_dir> <data_dir> <table_name> <row_count> [query_repeat]\n", argv[0]);
-        return 1;
-    }
-
-    schema_dir = argv[1];
-    data_dir = argv[2];
-    table_name = argv[3];
-    if (!parse_int_strict(argv[4], &row_count) || row_count <= 0) {
-        fprintf(stderr, "error: row_count must be a positive integer\n");
-        return 1;
-    }
-    if (argc == 6 && (!parse_int_strict(argv[5], &query_repeat) || query_repeat <= 0)) {
-        fprintf(stderr, "error: query_repeat must be a positive integer\n");
-        return 1;
-    }
 
     schema_result = load_schema(schema_dir, data_dir, table_name);
     if (!schema_result.ok) {
         fprintf(stderr, "error: %s\n", schema_result.message);
-        return 1;
-    }
-
-    for (index = 0; index < schema_result.schema.columns.count; index++) {
-        if (strcmp(schema_result.schema.columns.items[index], "id") != 0) {
-            other_column = schema_result.schema.columns.items[index];
-            break;
-        }
-    }
-
-    if (other_column == NULL) {
-        fprintf(stderr, "error: benchmark table must have at least one non-id column\n");
-        free_schema(&schema_result.schema);
         return 1;
     }
 
@@ -251,9 +221,36 @@ int benchmark_main(int argc, char *argv[]) {
     }
     insert_time = (double)(clock() - insert_started) / (double)CLOCKS_PER_SEC;
 
-    target_id = row_count / 2;
-    if (target_id < 1) {
-        target_id = 1;
+    printf("Prepared rows: %d\n", row_count);
+    printf("Insert time: %.6f sec\n", insert_time);
+
+    free_schema(&schema_result.schema);
+    table_index_registry_reset();
+    return 0;
+}
+
+/* query-only 모드: 이미 준비된 데이터셋에 대해 조회 시간만 측정한다. */
+static int run_query_only_mode(const char *schema_dir, const char *data_dir, const char *table_name, int target_id, int query_repeat) {
+    SchemaResult schema_result;
+    Statement id_select = {0};
+    Statement other_select = {0};
+    char id_text[32];
+    const char *other_column = NULL;
+    char *other_value = NULL;
+    double indexed_time;
+    double linear_time;
+
+    schema_result = load_schema(schema_dir, data_dir, table_name);
+    if (!schema_result.ok) {
+        fprintf(stderr, "error: %s\n", schema_result.message);
+        return 1;
+    }
+
+    other_column = find_first_non_id_column(&schema_result.schema);
+    if (other_column == NULL) {
+        fprintf(stderr, "error: benchmark table must have at least one non-id column\n");
+        free_schema(&schema_result.schema);
+        return 1;
     }
 
     snprintf(id_text, sizeof(id_text), "%d", target_id);
@@ -269,6 +266,7 @@ int benchmark_main(int argc, char *argv[]) {
         return 1;
     }
 
+    table_index_registry_reset();
     indexed_time = run_query_benchmark(&id_select, schema_dir, data_dir, query_repeat);
     linear_time = run_query_benchmark(&other_select, schema_dir, data_dir, query_repeat);
     if (indexed_time < 0.0 || linear_time < 0.0) {
@@ -280,8 +278,9 @@ int benchmark_main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf("Inserted rows: %d\n", row_count);
-    printf("Insert time: %.6f sec\n", insert_time);
+    printf("Query target id: %d\n", target_id);
+    printf("Query target column: %s\n", other_column);
+    printf("Query target value: %s\n", other_value);
     printf("Query repeats: %d\n", query_repeat);
     printf("Indexed query avg time: %.6f sec\n", indexed_time);
     printf("Linear query avg time: %.6f sec\n", linear_time);
@@ -292,6 +291,70 @@ int benchmark_main(int argc, char *argv[]) {
     free_schema(&schema_result.schema);
     table_index_registry_reset();
     return 0;
+}
+
+/*
+ * 벤치마크 프로그램의 실제 메인 로직이다.
+ *
+ * prepare:
+ * 1. schema 로딩
+ * 2. CSV 초기화
+ * 3. 대량 INSERT
+ * 4. 삽입 시간 출력
+ *
+ * query-only:
+ * 1. 기존 데이터셋 로딩
+ * 2. 인덱스 조회와 일반 컬럼 조회 반복 측정
+ * 3. 조회 시간만 출력
+ */
+int benchmark_main(int argc, char *argv[]) {
+    const char *mode;
+    int row_count;
+    int target_id;
+    int query_repeat = 100;
+
+    if (argc < 2) {
+        print_benchmark_usage(argv[0]);
+        return 1;
+    }
+
+    mode = argv[1];
+
+    if (strcmp(mode, "prepare") == 0) {
+        if (argc != 6) {
+            print_prepare_usage(argv[0]);
+            return 1;
+        }
+
+        if (!parse_int_strict(argv[5], &row_count) || row_count <= 0) {
+            fprintf(stderr, "error: row_count must be a positive integer\n");
+            return 1;
+        }
+
+        return run_prepare_mode(argv[2], argv[3], argv[4], row_count);
+    }
+
+    if (strcmp(mode, "query-only") == 0) {
+        if (argc != 6 && argc != 7) {
+            print_query_usage(argv[0]);
+            return 1;
+        }
+
+        if (!parse_int_strict(argv[5], &target_id) || target_id <= 0) {
+            fprintf(stderr, "error: target_id must be a positive integer\n");
+            return 1;
+        }
+        if (argc == 7 && (!parse_int_strict(argv[6], &query_repeat) || query_repeat <= 0)) {
+            fprintf(stderr, "error: query_repeat must be a positive integer\n");
+            return 1;
+        }
+
+        return run_query_only_mode(argv[2], argv[3], argv[4], target_id, query_repeat);
+    }
+
+    fprintf(stderr, "error: unknown benchmark mode: %s\n", mode);
+    print_benchmark_usage(argv[0]);
+    return 1;
 }
 
 #ifndef SQLPARSER_BENCHMARK_NO_MAIN

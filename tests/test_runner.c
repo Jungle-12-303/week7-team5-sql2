@@ -994,10 +994,11 @@ static void test_benchmark_main_resets_dataset(void) {
     char schema_path[192];
     char data_path[192];
     char error[256];
-    char *first_run_text;
-    char *second_run_text;
-    char *argv_first[] = {"benchmark_runner", schema_dir, data_dir, "users", "5", "3"};
-    char *argv_second[] = {"benchmark_runner", schema_dir, data_dir, "users", "5", "3"};
+    char *prepared_text;
+    char *query_before_text;
+    char *query_after_text;
+    char *prepare_argv[] = {"benchmark_runner", "prepare", schema_dir, data_dir, "users", "5"};
+    char *query_argv[] = {"benchmark_runner", "query-only", schema_dir, data_dir, "users", "5", "3"};
     int result_code;
 
     reset_runtime_state();
@@ -1007,26 +1008,33 @@ static void test_benchmark_main_resets_dataset(void) {
     expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write benchmark schema");
     expect_true(write_text_file(data_path, "id,name,age\n99,stale,55\n"), "write stale benchmark CSV");
 
-    result_code = benchmark_main(6, argv_first);
-    expect_true(result_code == 0, "benchmark_main runs with dedicated benchmark dataset");
-    first_run_text = read_entire_file(data_path, error, sizeof(error));
-    expect_true(first_run_text != NULL, "read benchmark CSV after first run");
-    if (first_run_text != NULL) {
-        expect_true(strstr(first_run_text, "99,stale,55") == NULL, "benchmark_main resets old benchmark data");
-        expect_true(count_lines(first_run_text) == 6, "benchmark_main writes header plus requested rows");
-        expect_true(strstr(first_run_text, "5,name_5,25") != NULL, "benchmark_main writes reproducible generated rows");
+    result_code = benchmark_main(6, prepare_argv);
+    expect_true(result_code == 0, "benchmark prepare mode runs with dedicated benchmark dataset");
+    prepared_text = read_entire_file(data_path, error, sizeof(error));
+    expect_true(prepared_text != NULL, "read benchmark CSV after prepare mode");
+    if (prepared_text != NULL) {
+        expect_true(strstr(prepared_text, "99,stale,55") == NULL, "prepare mode resets old benchmark data");
+        expect_true(count_lines(prepared_text) == 6, "prepare mode writes header plus requested rows");
+        expect_true(strstr(prepared_text, "5,name_5,25") != NULL, "prepare mode writes reproducible generated rows");
     }
 
-    result_code = benchmark_main(6, argv_second);
-    expect_true(result_code == 0, "benchmark_main reruns with same parameters");
-    second_run_text = read_entire_file(data_path, error, sizeof(error));
-    expect_true(second_run_text != NULL, "read benchmark CSV after second run");
-    if (first_run_text != NULL && second_run_text != NULL) {
-        expect_true(strcmp(first_run_text, second_run_text) == 0, "benchmark_main reproduces same dataset with same inputs");
+    query_before_text = read_entire_file(data_path, error, sizeof(error));
+    expect_true(query_before_text != NULL, "read benchmark CSV before query-only mode");
+
+    result_code = benchmark_main(7, query_argv);
+    expect_true(result_code == 0, "benchmark query-only mode runs with prepared dataset");
+    query_after_text = read_entire_file(data_path, error, sizeof(error));
+    expect_true(query_after_text != NULL, "read benchmark CSV after query-only mode");
+    if (query_before_text != NULL && query_after_text != NULL) {
+        expect_true(strcmp(query_before_text, query_after_text) == 0, "query-only mode does not reset prepared dataset");
     }
 
-    free(first_run_text);
-    free(second_run_text);
+    result_code = benchmark_main(7, query_argv);
+    expect_true(result_code == 0, "benchmark query-only mode reruns on same dataset");
+
+    free(prepared_text);
+    free(query_before_text);
+    free(query_after_text);
 }
 
 int main(void) {
