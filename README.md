@@ -206,7 +206,26 @@ SELECT * FROM 학생 WHERE id = 1000;
 ### 5. 벤치마크 실행
 
 ```bash
-./build/bin/benchmark_runner benchmark-workdir/schema benchmark-workdir/data student 1000000 100
+./build/bin/benchmark_runner prepare benchmark-workdir/schema benchmark-workdir/data student 1000000
+./build/bin/benchmark_runner query-only benchmark-workdir/schema benchmark-workdir/data student 500000 10
+```
+
+설명:
+
+- `benchmark-workdir/schema`: 벤치마크 전용 스키마 폴더
+- `benchmark-workdir/data`: 벤치마크 전용 CSV 폴더
+- `student`: 벤치마크 대상 테이블 이름
+- `1000000`: prepare 모드에서 미리 생성하고 삽입할 레코드 수
+- `500000`: query-only 모드에서 조회 비교에 사용할 `id`
+- `10`: 발표 시연용 query-only 반복 횟수
+
+발표 시연에서는 `query-only` 반복 횟수를 `10`으로 두는 것을 권장합니다.
+이 정도면 평균값의 의미를 유지하면서도 결과가 너무 늦지 않게 출력됩니다.
+
+발표에서는 prepare로 100만 건 데이터셋을 미리 만들어 두고, 시연 시간에는 query-only로 조회 시간만 비교한 뒤 아래처럼 일반 CLI로 실제 조회 결과 표를 보여 주면 흐름이 자연스럽습니다.
+
+```bash
+./build/bin/sqlparser -e "SELECT * FROM 학생 WHERE id = 500000;"
 ```
 
 ## 빌드
@@ -303,7 +322,7 @@ docker run --rm -v "C:/developer_folder/jungle-sql-processor-2nd:/workspace" -w 
 현재 테스트 러너 기준:
 
 - 상위 테스트 함수 `29개`
-- assertion `339개`
+- assertion `345개`
 
 실행:
 
@@ -331,29 +350,63 @@ make test
 
 ## 벤치마크
 
-벤치마크는 별도 바이너리로 실행합니다.
+벤치마크는 별도 바이너리로 실행하며, `prepare`와 `query-only` 두 모드를 지원합니다.
 
 ```bash
-./build/bin/benchmark_runner <schema_dir> <data_dir> <table_name> <row_count> [query_repeat]
+./build/bin/benchmark_runner prepare <schema_dir> <data_dir> <table_name> <row_count>
+./build/bin/benchmark_runner query-only <schema_dir> <data_dir> <table_name> <target_id> [query_repeat]
 ```
 
 예시:
 
 ```bash
-./build/bin/benchmark_runner benchmark-workdir/schema benchmark-workdir/data student 1000000 100
+./build/bin/benchmark_runner prepare benchmark-workdir/schema benchmark-workdir/data student 1000000
+./build/bin/benchmark_runner query-only benchmark-workdir/schema benchmark-workdir/data student 500000 10
 ```
+
+인자 의미:
+
+- `<schema_dir>`: 벤치마크 대상 스키마 폴더
+- `<data_dir>`: 벤치마크 대상 CSV 폴더
+- `<table_name>`: 대상 테이블 이름
+- `<row_count>`: `prepare` 모드에서 생성하고 삽입할 총 레코드 수
+- `<target_id>`: `query-only` 모드에서 인덱스 조회 대상으로 삼을 `id`
+- `[query_repeat]`: `query-only` 모드에서 같은 조회를 몇 번 반복해서 평균을 낼지 정하는 선택 인자
+
+100만 건 시연용 권장 명령:
+
+```bash
+make benchmark
+./build/bin/benchmark_runner prepare benchmark-workdir/schema benchmark-workdir/data student 1000000
+./build/bin/benchmark_runner query-only benchmark-workdir/schema benchmark-workdir/data student 500000 10
+./build/bin/sqlparser -e "SELECT * FROM 학생 WHERE id = 500000;"
+```
+
+참고:
+
+- 더 안정적인 평균값이 필요하면 `query_repeat`를 `100`으로 올릴 수 있습니다.
+- 다만 선형 조회는 100만 건을 매번 순회하므로, `100`회 반복은 발표 시연용으로는 오래 걸릴 수 있습니다.
+
+100회 반복 측정 결과 캡처:
+
+![Select Comparison](docs/images/select-comparison.png)
 
 출력:
 
-- 삽입한 행 수
-- 전체 삽입 시간
-- 반복 조회 횟수
-- `WHERE id = ...` 인덱스 조회 평균 시간
-- 일반 컬럼 `WHERE ...` 선형 조회 평균 시간
+- `prepare`
+  - 삽입한 행 수
+  - 전체 삽입 시간
+- `query-only`
+  - 조회 대상 `id`
+  - 비교에 사용할 일반 컬럼 이름과 값
+  - 반복 조회 횟수
+  - `WHERE id = ...` 인덱스 조회 평균 시간
+  - 일반 컬럼 `WHERE ...` 선형 조회 평균 시간
 
 주의:
 
-- 벤치마크는 시작 시 지정한 CSV를 헤더만 남기고 초기화한 뒤 같은 입력 파라미터로 같은 데이터셋을 다시 생성합니다.
+- `prepare`는 시작 시 지정한 CSV를 헤더만 남기고 초기화한 뒤 같은 입력 파라미터로 같은 데이터셋을 다시 생성합니다.
+- `query-only`는 이미 준비된 데이터셋을 그대로 사용하며, CSV를 다시 초기화하지 않습니다.
 - 실데이터를 보호하려면 기본 샘플인 `benchmark-workdir/schema`, `benchmark-workdir/data`에서 실행하는 것이 좋습니다.
 - 기본 벤치마크 작업 디렉터리 샘플은 아래에 포함돼 있습니다.
   - [benchmark-workdir/schema/student.meta](/C:/developer_folder/jungle-sql-processor-2nd/benchmark-workdir/schema/student.meta)
