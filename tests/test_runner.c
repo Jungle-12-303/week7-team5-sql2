@@ -314,6 +314,14 @@ static void test_cli_error_messages(void) {
     expect_true(exit_code != 0, "CLI returns non-zero for missing semicolon");
     expect_true(strstr(stderr_text, "error: expected ';' at end of SQL statement, got EOF at position") != NULL, "CLI reports missing semicolon with EOF detail");
 
+    expect_true(run_cli_command(root, "-e \"SELECT * FROM users WHERE id = 10 AND name = user10;\"", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with unsupported AND condition");
+    expect_true(exit_code != 0, "CLI returns non-zero for unsupported AND condition");
+    expect_true(strstr(stderr_text, "error: AND/OR conditions are not supported; only a single WHERE condition is allowed") != NULL, "CLI reports unsupported AND condition directly");
+
+    expect_true(run_cli_command(root, "-e \"SELECT * FROM users WHERE id = 10; user10;\"", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with extra tokens after semicolon");
+    expect_true(exit_code != 0, "CLI returns non-zero for extra tokens after semicolon");
+    expect_true(strstr(stderr_text, "error: unexpected tokens after SQL statement, got IDENTIFIER(\"user10\") at position") != NULL, "CLI reports extra tokens after semicolon");
+
     expect_true(run_cli_command(root, "-e \"\"", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with empty SQL");
     expect_true(exit_code != 0, "CLI returns non-zero for empty SQL");
     expect_true(strstr(stderr_text, "error: missing SQL statement") != NULL, "CLI reports empty SQL as missing SQL statement");

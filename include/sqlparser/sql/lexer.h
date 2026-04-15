@@ -1,10 +1,14 @@
-// lexer는 SQL 문자열을 작은 조각(Token)들로 자르는 단계다.
+/*
+ * sql/lexer.h
+ *
+ * SQL 문자열을 parser가 읽기 쉬운 토큰 배열로 쪼개는 계층의 공개 헤더다.
+ */
 #ifndef LEXER_H
 #define LEXER_H
 
 #include <stddef.h>
 
-// lexer가 SQL 문자열을 자른 뒤 붙이는 토큰 종류들이다.
+/* lexer가 구분해 내는 토큰 종류다. */
 typedef enum {
     TOKEN_IDENTIFIER,
     TOKEN_STRING,
@@ -18,29 +22,33 @@ typedef enum {
     TOKEN_END
 } TokenType;
 
-// 토큰 하나를 표현하는 구조체다.
+/* SQL 문자열에서 잘라 낸 토큰 한 개를 표현한다. */
 typedef struct {
-    // 토큰 종류다. 예: 식별자, 문자열, 쉼표.
+    /* 토큰의 종류 */
     TokenType type;
-    // 토큰 원문 텍스트다.
+    /* 토큰 원문 문자열 */
     char *text;
-    // 원래 SQL 문자열에서 시작 위치다.
+    /* 원본 SQL 문자열에서 시작한 위치 */
     int position;
 } Token;
 
-// 여러 개의 Token을 동적으로 담기 위한 배열 구조체다.
+/* 여러 토큰을 동적으로 저장하는 배열 구조체다. */
 typedef struct {
-    // 실제 토큰들이 담긴 배열이다.
+    /* 실제 토큰이 저장되는 배열 */
     Token *items;
-    // 현재 저장된 토큰 수다.
+    /* 현재 저장된 토큰 개수 */
     int count;
-    // 현재 확보한 배열 크기다.
+    /* items 배열이 확보한 전체 슬롯 수 */
     int capacity;
 } TokenArray;
 
-// SQL 문자열을 읽어 TokenArray로 분해한다.
+/*
+ * SQL 문자열을 읽어 TokenArray로 분해한다.
+ * 실패하면 0을 반환하고 error 버퍼에 원인을 적는다.
+ */
 int lex_sql(const char *input, TokenArray *tokens, char *error, size_t error_size);
-// TokenArray 내부 메모리를 해제한다.
+
+/* TokenArray 내부의 토큰 문자열과 배열 메모리를 정리한다. */
 void free_tokens(TokenArray *tokens);
 
 #endif

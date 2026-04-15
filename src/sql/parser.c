@@ -246,6 +246,27 @@ static int parse_condition_value(ParserState *state, char **value) {
     state->index++;
     return 1;
 }
+
+/* 현재 과제 범위에서는 WHERE 뒤에 조건을 하나만 둘 수 있다. */
+static int reject_unsupported_where_connector(ParserState *state) {
+    const Token *token = current_token(state);
+
+    if (token->type != TOKEN_IDENTIFIER) {
+        return 1;
+    }
+
+    if (!strings_equal_ignore_case(token->text, "AND") &&
+        !strings_equal_ignore_case(token->text, "OR")) {
+        return 1;
+    }
+
+    snprintf(state->result->message,
+             sizeof(state->result->message),
+             "AND/OR conditions are not supported; only a single WHERE condition is allowed, got IDENTIFIER(\"%s\") at position %d",
+             token->text,
+             token->position);
+    return 0;
+}
 /* INSERT 문장을 AST의 InsertStatement 형태로 채운다. */
 static int parse_insert(ParserState *state, Statement *statement) {
     // union 안의 INSERT 전용 영역을 읽기 쉽게 별칭으로 잡는다.
@@ -334,6 +355,10 @@ static int parse_select(ParserState *state, Statement *statement) {
         }
 
         if (!parse_condition_value(state, &select_statement->where_value)) {
+            return 0;
+        }
+
+        if (!reject_unsupported_where_connector(state)) {
             return 0;
         }
 
