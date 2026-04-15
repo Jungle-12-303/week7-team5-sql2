@@ -14,7 +14,7 @@
 
 ### B+Tree
 
-![Week 7 B+Tree Structure](docs/diagrams/week7-bptree-structure.svg)
+![Week 7 B+Tree Structure](docs/diagrams/week7-bptree-structure-1to9.svg)
 
 ### 핵심 구현
 
