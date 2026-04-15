@@ -1,6 +1,6 @@
 # SQL Processor Week 7
 
-파일 기반 SQL 처리기에 `id` 자동 부여와 메모리 기반 B+ 트리 인덱스를 붙여, `WHERE id = ...` 조회를 최적화한 7주차 프로젝트입니다.
+파일 기반 SQL 처리기에 숨은 내부 PK `__internal_id` 자동 부여와 메모리 기반 B+ 트리 인덱스를 붙여, `WHERE id = ...` 조회를 최적화하는 7주차 프로젝트입니다.
 
 기준 문서는 [docs/architecture.md](/C:/developer_folder/jungle-sql-processor-2nd/docs/architecture.md)와 [docs/requirements.md](/C:/developer_folder/jungle-sql-processor-2nd/docs/requirements.md)입니다. 구현 설명은 이 README보다 두 문서를 우선합니다.
 
@@ -12,14 +12,14 @@
 
 7주차 목표는 아래 3가지였습니다.
 
-- `INSERT` 시 레코드에 `id`를 자동 부여한다.
-- `id`를 키로 사용하는 메모리 기반 B+ 트리를 만든다.
+- `INSERT` 시 레코드에 숨은 내부 PK `__internal_id`를 자동 부여한다.
+- `__internal_id`를 키로 사용하는 메모리 기반 B+ 트리를 만든다.
 - `WHERE id = <number>` 조회는 인덱스를 사용하고, 다른 컬럼 조건은 기존 선형 탐색을 유지한다.
 
 ### 이번 주 핵심 구현
 
 - 기존 `INSERT`, `SELECT`, `SELECT ... WHERE` 흐름 유지
-- `id` 자동 부여
+- 숨은 내부 PK `__internal_id` 자동 부여
 - 테이블별 메모리 B+ 트리 인덱스 유지
 - `WHERE id = <number>` 인덱스 조회
 - CSV 기준 인덱스 재구성
@@ -64,10 +64,11 @@ CSV 기반 저장소는 구현이 단순하지만, 원하는 레코드를 찾으
 - 실제 데이터는 계속 `data/*.csv`에 저장합니다.
 - 인덱스는 메모리 구조이므로, 필요하면 CSV를 다시 읽어 재구성합니다.
 
-### 2. `id`는 시스템 관리 컬럼이다
+### 2. `id`는 사용자 컬럼이 아니라 시스템 예약 키다
 
-- 사용자가 `INSERT`를 실행하면 시스템이 새 `id`를 계산합니다.
-- 새 `id`는 현재 최대 `id + 1`입니다.
+- 사용자 스키마와 CSV에는 일반 컬럼만 저장합니다.
+- 시스템은 각 행에 대해 숨은 내부 PK `__internal_id`를 계산합니다.
+- SQL 문법에서는 `WHERE id = ...`가 이 내부 키를 가리킵니다.
 
 ### 3. `WHERE id = ...`만 인덱스를 탄다
 
@@ -133,13 +134,13 @@ CSV 기반 저장소는 구현이 단순하지만, 원하는 레코드를 찾으
 
 ```txt
 table=학생
-columns=id,department,student_number,name,age
+columns=department,student_number,name,age
 ```
 
 같은 테이블의 CSV 첫 줄은 아래와 같이 헤더를 가집니다.
 
 ```txt
-id,department,student_number,name,age
+department,student_number,name,age
 ```
 
 현재 포함된 샘플 데이터는 아래입니다.
@@ -151,10 +152,10 @@ id,department,student_number,name,age
 
 ### INSERT
 
-- 사용자는 `id`를 빼고 나머지 컬럼만 넣어도 됩니다.
-- 최종 저장되는 `id`는 시스템이 자동으로 결정합니다.
-- 새 `id`는 현재 테이블의 최대 `id + 1`입니다.
-- 저장 성공 후 `id -> CSV 행 위치`가 메모리 B+ 트리에 등록됩니다.
+- 사용자는 `id`를 빼고 나머지 컬럼만 넣습니다.
+- 최종 저장되는 내부 PK `__internal_id`는 시스템이 자동으로 결정합니다.
+- 새 내부 PK는 현재 테이블의 최대 `__internal_id + 1`입니다.
+- 저장 성공 후 `__internal_id -> CSV 행 위치`가 메모리 B+ 트리에 등록됩니다.
 
 예시:
 
@@ -168,11 +169,14 @@ VALUES ('컴퓨터공학과', '2024001', '김민수', 20);
 - 일반 `SELECT`와 일반 `WHERE`는 기존 CSV 선형 탐색을 사용합니다.
 - `WHERE id = <number>`는 정수 검증 후 B+ 트리 인덱스를 사용합니다.
 - `WHERE id = abc` 같은 입력은 오류입니다.
+- `SELECT id`는 시연과 검증을 위해 내부 `__internal_id`를 보여 줍니다.
+- `SELECT *`는 기존 의미를 유지하기 위해 사용자 컬럼만 출력하고, 내부 `__internal_id`는 자동 포함하지 않습니다.
 
 예시:
 
 ```sql
 SELECT * FROM 학생;
+SELECT id, name FROM 학생;
 SELECT name, age FROM 학생 WHERE department = '컴퓨터공학과';
 SELECT * FROM 학생 WHERE id = 1000;
 ```
@@ -197,6 +201,12 @@ SELECT * FROM 학생 WHERE id = 1000;
 ./build/bin/sqlparser -e "SELECT * FROM 학생 WHERE id = 1;"
 ```
 
+### 3-1. 자동 부여된 내부 id 확인
+
+```bash
+./build/bin/sqlparser -e "SELECT id, name FROM 학생 WHERE id = 1;"
+```
+
 ### 4. 일반 WHERE 조회
 
 ```bash
@@ -216,7 +226,7 @@ SELECT * FROM 학생 WHERE id = 1000;
 - `benchmark-workdir/data`: 벤치마크 전용 CSV 폴더
 - `student`: 벤치마크 대상 테이블 이름
 - `1000000`: prepare 모드에서 미리 생성하고 삽입할 레코드 수
-- `500000`: query-only 모드에서 조회 비교에 사용할 `id`
+- `500000`: query-only 모드에서 조회 비교에 사용할 내부 PK 값
 - `10`: 발표 시연용 query-only 반복 횟수
 
 발표 시연에서는 `query-only` 반복 횟수를 `10`으로 두는 것을 권장합니다.

@@ -9,7 +9,7 @@
 현재 기준 테스트 규모는 아래와 같다.
 
 - 현재 상위 테스트 함수 수: `29개`
-- 현재 assertion 수: `345개`
+- 현재 assertion 수: `375개`
 - 이전 보강 전 기준: 상위 테스트 함수 `12개`, assertion `110개`
 
 ## 2. 테스트 실행 방법
@@ -79,22 +79,22 @@ make test
 - `schema/*.meta` + `data/*.csv` 기반 파일 저장
 - 기존 프로젝트 호환성 유지
 
-### 3.4 INSERT 및 자동 ID 테스트
+### 3.4 INSERT 및 자동 내부 PK 테스트
 
 대상 함수:
 - `test_insert_auto_id`
 - `test_insert_overrides_user_id`
 
 검증 내용:
-- `INSERT` 시 `id`가 자동 생성된다.
-- 첫 삽입은 `id = 1`부터 시작한다.
+- `INSERT` 시 숨은 내부 PK가 자동 생성된다.
+- 첫 삽입은 내부 PK `1`부터 시작한다.
 - 일부 컬럼만 입력해도 누락 컬럼은 빈 문자열로 저장된다.
-- 사용자가 `id`를 명시해도 최종 저장 값은 시스템이 결정한다.
+- 내부 PK는 시스템이 결정하며 사용자 스키마에 명시적 `id` 컬럼이 없어도 동작하는 것이 목표 설계다.
 - `INSERT` 이후 테이블 인덱스가 메모리에 로드된다.
 
 연관 요구사항:
-- 시스템 관리 `id`
-- 새 레코드 `id = max(id) + 1`
+- 시스템 관리 `__internal_id`
+- 새 레코드 `__internal_id = max(__internal_id) + 1`
 - 기존 SQL 처리기와의 연동 유지
 
 ### 3.5 일반 WHERE 테스트
@@ -111,13 +111,13 @@ make test
 연관 요구사항:
 - `WHERE` 대상이 `id`가 아니면 기존 선형 탐색 유지
 
-### 3.6 인덱스 기반 ID 조회 테스트
+### 3.6 인덱스 기반 내부 PK 조회 테스트
 
 대상 함수:
 - `test_select_execution_with_id_index`
 
 검증 내용:
-- `WHERE id = 2` 조건에서 정확한 한 행을 반환한다.
+- `WHERE id = 2` 조건에서 내부 PK 기준으로 정확한 한 행을 반환한다.
 - 비대상 행이 결과에 섞이지 않는다.
 - 실행 과정에서 테이블 인덱스가 메모리에 로드된다.
 
@@ -134,7 +134,7 @@ make test
 
 검증 내용:
 - 한 번 로드한 인덱스를 메모리에서 초기화한 뒤에도 다시 재구성할 수 있다.
-- 재구성 후 같은 `id` 조회 결과를 얻는다.
+- 재구성 후 같은 내부 PK 조회 결과를 얻는다.
 - 인덱스를 강제로 무효화한 뒤에도 다음 `WHERE id` 조회에서 다시 재구성할 수 있다.
 - CSV 저장 후 인덱스 등록 실패가 발생해도 다음 인덱스 조회에서 CSV 기준 재구성으로 복구할 수 있다.
 
@@ -151,27 +151,24 @@ make test
 - `test_invalid_where_id_value`
 - `test_invalid_where_id_value_no_header_output`
 - `test_invalid_rebuild_data`
-- `test_invalid_rebuild_non_integer_id`
-- `test_invalid_rebuild_missing_id`
-- `test_insert_requires_id_column`
-- `test_select_where_id_requires_id_column`
+- `test_schema_rejects_explicit_id_column`
+- `test_insert_without_explicit_id_column`
+- `test_select_where_id_without_explicit_id_column`
 
 검증 내용:
 - `SELECT`만 입력한 경우, 지원하지 않는 명령어, 세미콜론 누락, 빈 입력, 알 수 없는 옵션 등 CLI 경계값 입력에서 실제 오류 유형에 맞는 메시지를 출력한다.
 - bare argument가 디렉터리일 때 SQL 문자열로 오인하지 않고 파일 경로 오류로 처리한다.
 - `WHERE id = abc`처럼 정수가 아닌 값은 오류 처리한다.
 - `WHERE id = abc` 오류 시 헤더를 먼저 출력하지 않는다.
-- CSV 재구성 중 중복 `id`를 만나면 오류 처리한다.
-- CSV 재구성 중 정수가 아닌 `id`를 만나면 오류 처리한다.
-- CSV 재구성 중 누락된 `id`를 만나면 오류 처리한다.
-- `id` 컬럼이 없는 테이블은 자동 `id` INSERT 대상으로 사용할 수 없다.
-- `id` 컬럼이 없는 테이블은 `WHERE id` 인덱스 조회 대상으로 사용할 수 없다.
+- CSV 재구성 중 내부 PK 순서가 깨지지 않아야 한다.
+- 내부 PK는 CSV 행 순서 기준으로 재구성 가능해야 한다.
+- 명시적 `id` 컬럼 유무와 무관하게 내부 PK 정책이 유지되어야 한다.
 
 연관 요구사항:
 - CLI 예외 입력에 대한 세부 오류 메시지
 - 파일 경로 입력과 SQL 문자열 입력의 정확한 구분
 - `WHERE id` 정수 검증
-- 재구성 중 중복/비정상 `id` 오류 정책
+- 재구성 중 내부 PK 순서 정책
 
 ### 3.9 CSV 저장 테스트
 
@@ -215,6 +212,6 @@ make test
 
 ## 5. 요약
 
-현재 테스트 러너는 7주차 핵심인 자동 `id`, 인덱스 조회, 재구성, 기본 오류 처리까지 커버한다. 특히 `WHERE id` 오류 출력 순서와 `id` 컬럼 제약, 재구성 중 비정상 `id` 데이터까지 회귀 테스트에 포함한다.
+현재 테스트 러너는 7주차 핵심인 자동 내부 PK, 인덱스 조회, 재구성, 기본 오류 처리를 커버한다. 특히 명시적 `id` 컬럼 금지, `id` 없는 스키마에서의 INSERT, `WHERE id` 인덱스 조회, 재구성 후 동일 결과 보장을 회귀 테스트에 포함한다.
 
 즉, 현재 테스트 세트는 구현된 7주차 핵심 기능의 회귀 테스트로 사용할 수 있으며, 이후에는 성능/벤치마크와 복구 실패 시나리오를 보강하는 방식으로 확장하는 것이 적절하다.

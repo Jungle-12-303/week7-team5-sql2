@@ -399,6 +399,12 @@ SchemaResult load_schema(const char *schema_dir, const char *data_dir, const cha
         return result;
     }
 
+    if (schema_find_id_column(&result.schema) >= 0) {
+        free_schema(&result.schema);
+        set_schema_error(&result, "reserved column name 'id' is not allowed in user schema");
+        return result;
+    }
+
     // SQL에서는 선언된 table 이름과 실제 파일 basename 둘 다 허용한다.
     if (strcmp(result.schema.table_name, table_name) != 0 &&
         strcmp(result.schema.storage_name, table_name) != 0) {

@@ -389,7 +389,7 @@ static void test_cli_success_output_includes_elapsed_time(void) {
     expect_true(run_cli_command(root, "-e \"SELECT * FROM student WHERE id = 1;\"", NULL, stdout_text, sizeof(stdout_text), stderr_text, sizeof(stderr_text), &exit_code), "run CLI with successful SELECT");
     expect_true(exit_code == 0, "CLI returns zero for successful SELECT");
     expect_true(stderr_text[0] == '\0', "CLI successful SELECT does not print stderr");
-    expect_true(strstr(stdout_text, "+----+") != NULL, "CLI successful SELECT prints result table");
+    expect_true(strstr(stdout_text, "+-") != NULL, "CLI successful SELECT prints result table");
     expect_true(strstr(stdout_text, "SELECT 1") != NULL, "CLI successful SELECT prints affected row summary");
     expect_true(strstr(stdout_text, "Elapsed time: ") != NULL, "CLI successful SELECT prints elapsed time");
 }
@@ -406,8 +406,8 @@ static void test_schema_loading_with_alias_filename(void) {
     expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create alias schema test directories");
     build_child_path(schema_path, sizeof(schema_path), schema_dir, "student.meta");
     build_child_path(data_path, sizeof(data_path), data_dir, "student.csv");
-    expect_true(write_text_file(schema_path, "table=학생\ncolumns=id,department,student_number,name,age\n"), "write alias schema meta");
-    expect_true(write_text_file(data_path, "id,department,student_number,name,age\n1,컴퓨터공학과,2024001,김민수,20\n"), "write alias schema CSV");
+    expect_true(write_text_file(schema_path, "table=학생\ncolumns=department,student_number,name,age\n"), "write alias schema meta");
+    expect_true(write_text_file(data_path, "department,student_number,name,age\n컴퓨터공학과,2024001,김민수,20\n"), "write alias schema CSV");
 
     result = load_schema(schema_dir, data_dir, "학생");
     expect_true(result.ok, "load schema resolves alias table name");
@@ -459,8 +459,8 @@ static void test_insert_auto_id(void) {
     expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create auto id test directories");
     build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
     build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
-    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write auto id schema");
-    expect_true(write_text_file(data_path, "id,name,age\n"), "write auto id CSV");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=name,age\n"), "write auto id schema");
+    expect_true(write_text_file(data_path, "name,age\n"), "write auto id CSV");
     expect_true(load_statement("INSERT INTO users (name) VALUES ('Alice');", &statement), "build auto id INSERT");
 
     result = execute_statement(&statement, schema_dir, data_dir, stdout);
@@ -468,7 +468,7 @@ static void test_insert_auto_id(void) {
     csv_text = read_entire_file(data_path, error, sizeof(error));
     expect_true(csv_text != NULL, "read CSV after auto id INSERT");
     if (csv_text != NULL) {
-        expect_true(strstr(csv_text, "1,Alice,\"\"") != NULL, "INSERT auto-generates id 1");
+        expect_true(strstr(csv_text, "Alice,\"\"") != NULL, "INSERT writes user columns without explicit id");
         free(csv_text);
     }
     expect_true(table_index_is_loaded("users"), "INSERT loads table index");
@@ -490,17 +490,16 @@ static void test_insert_overrides_user_id(void) {
     expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create override id test directories");
     build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
     build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
-    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write override id schema");
-    expect_true(write_text_file(data_path, "id,name,age\n1,Bob,21\n"), "write existing CSV row");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=name,age\n"), "write override id schema");
+    expect_true(write_text_file(data_path, "name,age\nBob,21\n"), "write existing CSV row");
     expect_true(load_statement("INSERT INTO users (id, name) VALUES (99, 'Alice');", &statement), "build INSERT with explicit id");
 
     result = execute_statement(&statement, schema_dir, data_dir, stdout);
-    expect_true(result.ok, "execute INSERT with explicit id");
+    expect_true(!result.ok, "explicit id INSERT is rejected");
     csv_text = read_entire_file(data_path, error, sizeof(error));
     expect_true(csv_text != NULL, "read CSV after explicit id INSERT");
     if (csv_text != NULL) {
-        expect_true(strstr(csv_text, "2,Alice,\"\"") != NULL, "system-managed id overrides user-provided id");
-        expect_true(strstr(csv_text, "99,Alice") == NULL, "user-provided id is not stored");
+        expect_true(strstr(csv_text, "Alice") == NULL, "explicit id INSERT does not append row");
         free(csv_text);
     }
     free_statement(&statement);
@@ -524,8 +523,8 @@ static void test_select_execution_with_general_where(void) {
     build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
     build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
     build_child_path(output_path, sizeof(output_path), root, "select_where_output.txt");
-    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write general WHERE schema");
-    expect_true(write_text_file(data_path, "id,name,age\n1,Alice,20\n2,Bob,21\n3,Carol,20\n"), "write general WHERE CSV");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=name,age\n"), "write general WHERE schema");
+    expect_true(write_text_file(data_path, "name,age\nAlice,20\nBob,21\nCarol,20\n"), "write general WHERE CSV");
     expect_true(load_statement("SELECT name FROM users WHERE age = 20;", &statement), "build general WHERE SELECT");
 
     output_file = fopen(output_path, "wb");
@@ -571,8 +570,8 @@ static void test_select_execution_with_id_index(void) {
     build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
     build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
     build_child_path(output_path, sizeof(output_path), root, "select_id_output.txt");
-    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write id WHERE schema");
-    expect_true(write_text_file(data_path, "id,name,age\n1,Alice,20\n2,Bob,21\n3,Carol,22\n"), "write id WHERE CSV");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=name,age\n"), "write id WHERE schema");
+    expect_true(write_text_file(data_path, "name,age\nAlice,20\nBob,21\nCarol,22\n"), "write id WHERE CSV");
     expect_true(load_statement("SELECT name FROM users WHERE id = 2;", &statement), "build id WHERE SELECT");
 
     output_file = fopen(output_path, "wb");
@@ -599,6 +598,93 @@ static void test_select_execution_with_id_index(void) {
     free_statement(&statement);
 }
 
+static void test_select_explicit_internal_id_column(void) {
+    char root[128];
+    char schema_dir[160];
+    char data_dir[160];
+    char schema_path[192];
+    char data_path[192];
+    char output_path[192];
+    char error[256];
+    char *output_text;
+    Statement statement = {0};
+    ExecResult result;
+    FILE *output_file;
+
+    reset_runtime_state();
+    expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create explicit internal id SELECT test directories");
+    build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
+    build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
+    build_child_path(output_path, sizeof(output_path), root, "select_internal_id_output.txt");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=name,age\n"), "write explicit internal id SELECT schema");
+    expect_true(write_text_file(data_path, "name,age\nAlice,20\nBob,21\nCarol,22\n"), "write explicit internal id SELECT CSV");
+    expect_true(load_statement("SELECT id, name FROM users WHERE age = 21;", &statement), "build explicit internal id SELECT");
+
+    output_file = fopen(output_path, "wb");
+    expect_true(output_file != NULL, "open explicit internal id SELECT output");
+    if (output_file == NULL) {
+        free_statement(&statement);
+        return;
+    }
+
+    result = execute_statement(&statement, schema_dir, data_dir, output_file);
+    fclose(output_file);
+    expect_true(result.ok, "execute explicit internal id SELECT");
+    expect_true(result.affected_rows == 1, "explicit internal id SELECT returns one row");
+    output_text = read_entire_file(output_path, error, sizeof(error));
+    expect_true(output_text != NULL, "read explicit internal id SELECT output");
+    if (output_text != NULL) {
+        expect_true(strstr(output_text, "| id | name |") != NULL, "explicit internal id SELECT prints id header");
+        expect_true(strstr(output_text, "| 2  | Bob  |") != NULL, "explicit internal id SELECT prints internal id value");
+        expect_true(strstr(output_text, "Alice") == NULL, "explicit internal id SELECT excludes non-matching rows");
+        free(output_text);
+    }
+    expect_true(!table_index_is_loaded("users"), "explicit internal id SELECT on general WHERE keeps linear path");
+    free_statement(&statement);
+}
+
+static void test_select_star_hides_internal_id_column(void) {
+    char root[128];
+    char schema_dir[160];
+    char data_dir[160];
+    char schema_path[192];
+    char data_path[192];
+    char output_path[192];
+    char error[256];
+    char *output_text;
+    Statement statement = {0};
+    ExecResult result;
+    FILE *output_file;
+
+    reset_runtime_state();
+    expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create SELECT star hidden id test directories");
+    build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
+    build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
+    build_child_path(output_path, sizeof(output_path), root, "select_star_hidden_id_output.txt");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=name,age\n"), "write SELECT star hidden id schema");
+    expect_true(write_text_file(data_path, "name,age\nAlice,20\nBob,21\n"), "write SELECT star hidden id CSV");
+    expect_true(load_statement("SELECT * FROM users WHERE id = 2;", &statement), "build SELECT star hidden id query");
+
+    output_file = fopen(output_path, "wb");
+    expect_true(output_file != NULL, "open SELECT star hidden id output");
+    if (output_file == NULL) {
+        free_statement(&statement);
+        return;
+    }
+
+    result = execute_statement(&statement, schema_dir, data_dir, output_file);
+    fclose(output_file);
+    expect_true(result.ok, "execute SELECT star hidden id query");
+    output_text = read_entire_file(output_path, error, sizeof(error));
+    expect_true(output_text != NULL, "read SELECT star hidden id output");
+    if (output_text != NULL) {
+        expect_true(strstr(output_text, "| id |") == NULL, "SELECT star does not print hidden id header");
+        expect_true(strstr(output_text, "Bob") != NULL, "SELECT star hidden id query still returns matching row");
+        free(output_text);
+    }
+    free_statement(&statement);
+}
+
 static void test_index_rebuild_after_reset(void) {
     char root[128];
     char schema_dir[160];
@@ -617,8 +703,8 @@ static void test_index_rebuild_after_reset(void) {
     build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
     build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
     build_child_path(output_path, sizeof(output_path), root, "rebuild_output.txt");
-    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write rebuild schema");
-    expect_true(write_text_file(data_path, "id,name,age\n1,Alice,20\n2,Bob,21\n"), "write rebuild CSV");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=name,age\n"), "write rebuild schema");
+    expect_true(write_text_file(data_path, "name,age\nAlice,20\nBob,21\n"), "write rebuild CSV");
     expect_true(load_statement("SELECT name FROM users WHERE id = 2;", &statement), "build rebuild SELECT");
 
     output_file = fopen(output_path, "wb");
@@ -671,8 +757,8 @@ static void test_index_rebuild_after_invalidate(void) {
     build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
     build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
     build_child_path(output_path, sizeof(output_path), root, "invalidate_rebuild_output.txt");
-    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write invalidate rebuild schema");
-    expect_true(write_text_file(data_path, "id,name,age\n1,Alice,20\n2,Bob,21\n"), "write invalidate rebuild CSV");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=name,age\n"), "write invalidate rebuild schema");
+    expect_true(write_text_file(data_path, "name,age\nAlice,20\nBob,21\n"), "write invalidate rebuild CSV");
     expect_true(load_statement("SELECT name FROM users WHERE id = 2;", &statement), "build invalidate rebuild SELECT");
 
     output_file = fopen(output_path, "wb");
@@ -723,8 +809,8 @@ static void test_invalid_where_id_value(void) {
     expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create invalid id WHERE test directories");
     build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
     build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
-    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write invalid id WHERE schema");
-    expect_true(write_text_file(data_path, "id,name,age\n1,Alice,20\n"), "write invalid id WHERE CSV");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=name,age\n"), "write invalid id WHERE schema");
+    expect_true(write_text_file(data_path, "name,age\nAlice,20\n"), "write invalid id WHERE CSV");
     expect_true(load_statement("SELECT * FROM users WHERE id = abc;", &statement), "build invalid id WHERE SELECT");
 
     result = execute_statement(&statement, schema_dir, data_dir, stdout);
@@ -750,8 +836,8 @@ static void test_invalid_where_id_value_no_header_output(void) {
     build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
     build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
     build_child_path(output_path, sizeof(output_path), root, "invalid_id_output.txt");
-    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write invalid id WHERE output schema");
-    expect_true(write_text_file(data_path, "id,name,age\n1,Alice,20\n"), "write invalid id WHERE output CSV");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=name,age\n"), "write invalid id WHERE output schema");
+    expect_true(write_text_file(data_path, "name,age\nAlice,20\n"), "write invalid id WHERE output CSV");
     expect_true(load_statement("SELECT name FROM users WHERE id = abc;", &statement), "build invalid id WHERE output SELECT");
 
     output_file = fopen(output_path, "wb");
@@ -786,60 +872,36 @@ static void test_invalid_rebuild_data(void) {
     expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create invalid rebuild test directories");
     build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
     build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
-    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write invalid rebuild schema");
-    expect_true(write_text_file(data_path, "id,name,age\n1,Alice,20\n1,Bob,21\n"), "write duplicate id CSV");
-    expect_true(load_statement("SELECT * FROM users WHERE id = 1;", &statement), "build duplicate id SELECT");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=name,age\n"), "write invalid rebuild schema");
+    expect_true(write_text_file(data_path, "name,age\nAlice,20\nBob,21,extra\n"), "write malformed rebuild CSV");
+    expect_true(load_statement("SELECT * FROM users WHERE id = 2;", &statement), "build malformed rebuild SELECT");
 
     result = execute_statement(&statement, schema_dir, data_dir, stdout);
-    expect_true(!result.ok, "duplicate id during rebuild returns error");
+    expect_true(!result.ok, "malformed row during indexed read returns error");
     free_statement(&statement);
 }
 
-static void test_invalid_rebuild_non_integer_id(void) {
+static void test_schema_rejects_explicit_id_column(void) {
     char root[128];
     char schema_dir[160];
     char data_dir[160];
     char schema_path[192];
     char data_path[192];
-    Statement statement = {0};
-    ExecResult result;
+    SchemaResult result;
 
     reset_runtime_state();
-    expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create non-integer rebuild test directories");
+    expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create reserved id schema test directories");
     build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
     build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
-    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write non-integer rebuild schema");
-    expect_true(write_text_file(data_path, "id,name,age\nabc,Alice,20\n"), "write non-integer id CSV");
-    expect_true(load_statement("SELECT * FROM users WHERE id = 1;", &statement), "build non-integer id SELECT");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write reserved id schema");
+    expect_true(write_text_file(data_path, "id,name,age\n1,Alice,20\n"), "write reserved id CSV");
 
-    result = execute_statement(&statement, schema_dir, data_dir, stdout);
-    expect_true(!result.ok, "non-integer id during rebuild returns error");
-    free_statement(&statement);
+    result = load_schema(schema_dir, data_dir, "users");
+    expect_true(!result.ok, "schema with explicit id column is rejected");
+    expect_true(strstr(result.message, "reserved column name 'id'") != NULL, "schema rejection reports reserved id name");
 }
 
-static void test_invalid_rebuild_missing_id(void) {
-    char root[128];
-    char schema_dir[160];
-    char data_dir[160];
-    char schema_path[192];
-    char data_path[192];
-    Statement statement = {0};
-    ExecResult result;
-
-    reset_runtime_state();
-    expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create missing id rebuild test directories");
-    build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
-    build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
-    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write missing id rebuild schema");
-    expect_true(write_text_file(data_path, "id,name,age\n,Alice,20\n"), "write missing id CSV");
-    expect_true(load_statement("SELECT * FROM users WHERE id = 1;", &statement), "build missing id SELECT");
-
-    result = execute_statement(&statement, schema_dir, data_dir, stdout);
-    expect_true(!result.ok, "missing id during rebuild returns error");
-    free_statement(&statement);
-}
-
-static void test_insert_requires_id_column(void) {
+static void test_insert_without_explicit_id_column(void) {
     char root[128];
     char schema_dir[160];
     char data_dir[160];
@@ -857,11 +919,11 @@ static void test_insert_requires_id_column(void) {
     expect_true(load_statement("INSERT INTO users (name) VALUES ('Alice');", &statement), "build no id INSERT");
 
     result = execute_statement(&statement, schema_dir, data_dir, stdout);
-    expect_true(!result.ok, "INSERT fails when id column is missing");
+    expect_true(result.ok, "INSERT succeeds without explicit id column");
     free_statement(&statement);
 }
 
-static void test_select_where_id_requires_id_column(void) {
+static void test_select_where_id_without_explicit_id_column(void) {
     char root[128];
     char schema_dir[160];
     char data_dir[160];
@@ -879,7 +941,7 @@ static void test_select_where_id_requires_id_column(void) {
     expect_true(load_statement("SELECT * FROM users WHERE id = 1;", &statement), "build no id SELECT");
 
     result = execute_statement(&statement, schema_dir, data_dir, stdout);
-    expect_true(!result.ok, "WHERE id fails when id column is missing");
+    expect_true(result.ok, "WHERE id works without explicit id column");
     free_statement(&statement);
 }
 
@@ -979,8 +1041,8 @@ static void test_insert_failure_recovers_via_rebuild(void) {
     build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
     build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
     build_child_path(output_path, sizeof(output_path), root, "forced_rebuild_output.txt");
-    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write forced register failure schema");
-    expect_true(write_text_file(data_path, "id,name,age\n1,Bob,21\n"), "write forced register failure CSV");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=name,age\n"), "write forced register failure schema");
+    expect_true(write_text_file(data_path, "name,age\nBob,21\n"), "write forced register failure CSV");
     expect_true(load_statement("INSERT INTO users (name) VALUES ('Alice');", &insert_statement), "build forced register failure INSERT");
 
     table_index_force_next_register_failure();
@@ -990,7 +1052,7 @@ static void test_insert_failure_recovers_via_rebuild(void) {
     csv_text = read_entire_file(data_path, error, sizeof(error));
     expect_true(csv_text != NULL, "read CSV after forced index registration failure");
     if (csv_text != NULL) {
-        expect_true(strstr(csv_text, "2,Alice,\"\"") != NULL, "CSV keeps appended row after registration failure");
+        expect_true(strstr(csv_text, "Alice,\"\"") != NULL, "CSV keeps appended row after registration failure");
         free(csv_text);
     }
     free_statement(&insert_statement);
@@ -1034,8 +1096,8 @@ static void test_benchmark_main_resets_dataset(void) {
     expect_true(create_test_dirs(root, sizeof(root), schema_dir, sizeof(schema_dir), data_dir, sizeof(data_dir)), "create benchmark test directories");
     build_child_path(schema_path, sizeof(schema_path), schema_dir, "users.meta");
     build_child_path(data_path, sizeof(data_path), data_dir, "users.csv");
-    expect_true(write_text_file(schema_path, "table=users\ncolumns=id,name,age\n"), "write benchmark schema");
-    expect_true(write_text_file(data_path, "id,name,age\n99,stale,55\n"), "write stale benchmark CSV");
+    expect_true(write_text_file(schema_path, "table=users\ncolumns=name,age\n"), "write benchmark schema");
+    expect_true(write_text_file(data_path, "name,age\nstale,55\n"), "write stale benchmark CSV");
 
     result_code = benchmark_main(6, prepare_argv);
     expect_true(result_code == 0, "benchmark prepare mode runs with dedicated benchmark dataset");
@@ -1044,7 +1106,7 @@ static void test_benchmark_main_resets_dataset(void) {
     if (prepared_text != NULL) {
         expect_true(strstr(prepared_text, "99,stale,55") == NULL, "prepare mode resets old benchmark data");
         expect_true(count_lines(prepared_text) == 6, "prepare mode writes header plus requested rows");
-        expect_true(strstr(prepared_text, "5,name_5,25") != NULL, "prepare mode writes reproducible generated rows");
+        expect_true(strstr(prepared_text, "name_5,25") != NULL, "prepare mode writes reproducible generated rows");
     }
 
     query_before_text = read_entire_file(data_path, error, sizeof(error));
@@ -1082,15 +1144,16 @@ int main(void) {
     test_insert_overrides_user_id();
     test_select_execution_with_general_where();
     test_select_execution_with_id_index();
+    test_select_explicit_internal_id_column();
+    test_select_star_hides_internal_id_column();
     test_index_rebuild_after_reset();
     test_index_rebuild_after_invalidate();
     test_invalid_where_id_value();
     test_invalid_where_id_value_no_header_output();
     test_invalid_rebuild_data();
-    test_invalid_rebuild_non_integer_id();
-    test_invalid_rebuild_missing_id();
-    test_insert_requires_id_column();
-    test_select_where_id_requires_id_column();
+    test_schema_rejects_explicit_id_column();
+    test_insert_without_explicit_id_column();
+    test_select_where_id_without_explicit_id_column();
     test_csv_escape();
     test_storage_reports_missing_table_file();
     test_read_entire_file_reports_missing_sql_file();

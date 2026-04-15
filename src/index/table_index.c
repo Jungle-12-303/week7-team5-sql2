@@ -33,9 +33,8 @@ typedef struct {
 } TableIndexRegistry;
 
 typedef struct {
-    int id_index;
     BPlusTree *tree;
-    int max_id;
+    int next_id;
 } RebuildContext;
 
 static TableIndexRegistry registry = {0};
@@ -99,33 +98,20 @@ static TableIndex *get_or_create_table_index(const char *table_name, char *messa
  * CSV 한 행을 읽을 때마다 호출되는 재구성 콜백이다.
  *
  * 각 행에서:
- * - id를 읽고
- * - 정수인지 검사하고
- * - B+ 트리에 삽입하고
- * - max_id를 갱신한다.
+ * - 현재 행 순서에 대응하는 내부 id를 계산하고
+ * - 그 내부 id와 CSV 오프셋을 B+ 트리에 삽입하고
+ * - 다음 행이 사용할 next_id를 하나 증가시킨다.
  */
 static int rebuild_row(const StringList *fields, long row_offset, void *context, char *error, size_t error_size) {
     RebuildContext *rebuild = (RebuildContext *)context;
-    int id_value;
+    int internal_id = rebuild->next_id;
 
-    if (rebuild->id_index < 0 || rebuild->id_index >= fields->count) {
-        snprintf(error, error_size, "missing id column while rebuilding index");
+    (void)fields;
+    if (!bptree_insert(rebuild->tree, internal_id, row_offset, error, error_size)) {
         return 0;
     }
 
-    if (!parse_int_strict(fields->items[rebuild->id_index], &id_value)) {
-        snprintf(error, error_size, "invalid integer id while rebuilding index");
-        return 0;
-    }
-
-    if (!bptree_insert(rebuild->tree, id_value, row_offset, error, error_size)) {
-        return 0;
-    }
-
-    if (id_value > rebuild->max_id) {
-        rebuild->max_id = id_value;
-    }
-
+    rebuild->next_id++;
     return 1;
 }
 
@@ -138,14 +124,6 @@ static int rebuild_row(const StringList *fields, long row_offset, void *context,
 static int ensure_loaded(const Schema *schema, const char *data_dir, TableIndex **out_index, char *message, size_t message_size) {
     TableIndex *entry;
     RebuildContext rebuild;
-    int id_index;
-
-    /* 인덱스 기반 접근은 반드시 id 컬럼이 있어야만 의미가 있다. */
-    id_index = schema_find_id_column(schema);
-    if (id_index < 0) {
-        snprintf(message, message_size, "id column is required for indexed access");
-        return 0;
-    }
 
     entry = get_or_create_table_index(schema->storage_name, message, message_size);
     if (entry == NULL) {
@@ -159,11 +137,10 @@ static int ensure_loaded(const Schema *schema, const char *data_dir, TableIndex 
     if (!entry->loaded) {
         bptree_free(&entry->tree);
         bptree_init(&entry->tree);
-        rebuild.id_index = id_index;
         rebuild.tree = &entry->tree;
-        rebuild.max_id = 0;
+        rebuild.next_id = 1;
 
-        /* CSV 각 행마다 rebuild_row 콜백을 호출해 id -> offset을 트리에 쌓는다. */
+        /* CSV 각 행마다 행 순서 기반 내부 id -> offset 매핑을 트리에 쌓는다. */
         if (!scan_rows_csv(data_dir, schema->storage_name, rebuild_row, &rebuild, message, message_size)) {
             bptree_free(&entry->tree);
             bptree_init(&entry->tree);
@@ -174,7 +151,7 @@ static int ensure_loaded(const Schema *schema, const char *data_dir, TableIndex 
 
         /* 재구성이 끝나면 이후 INSERT 자동 id 계산용 next_id도 함께 갱신한다. */
         entry->loaded = 1;
-        entry->next_id = rebuild.max_id + 1;
+        entry->next_id = rebuild.next_id;
     }
 
     *out_index = entry;

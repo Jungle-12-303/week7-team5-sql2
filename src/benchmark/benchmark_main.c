@@ -100,11 +100,6 @@ static int build_insert_statement(const Schema *schema, int row_number, Statemen
     for (index = 0; index < schema->columns.count; index++) {
         char *value_text;
 
-        /* id는 시스템이 자동 부여하므로 벤치마크 입력에서는 제외한다. */
-        if (strcmp(schema->columns.items[index], "id") == 0) {
-            continue;
-        }
-
         if (!string_list_push(&statement->as.insert_statement.columns, schema->columns.items[index])) {
             free_generated_statement(statement);
             snprintf(message, message_size, "out of memory while building benchmark insert");
@@ -175,14 +170,12 @@ static double run_query_benchmark(const Statement *statement, const char *schema
     return ((double)(clock() - started) / (double)CLOCKS_PER_SEC) / (double)repeat_count;
 }
 
-/* 스키마에서 id가 아닌 첫 번째 컬럼 이름을 찾는다. */
+/* 스키마에서 첫 번째 사용자 컬럼 이름을 찾는다. */
 static const char *find_first_non_id_column(const Schema *schema) {
     int index;
 
     for (index = 0; index < schema->columns.count; index++) {
-        if (strcmp(schema->columns.items[index], "id") != 0) {
-            return schema->columns.items[index];
-        }
+        return schema->columns.items[index];
     }
 
     return NULL;
@@ -277,10 +270,10 @@ static int run_query_only_mode(const char *schema_dir, const char *data_dir, con
         return 1;
     }
 
-    /* id 외 다른 컬럼으로도 선형 탐색 비교를 해야 하므로 첫 번째 non-id 컬럼을 찾는다. */
+    /* 선형 탐색 비교를 위해 첫 번째 사용자 컬럼을 찾는다. */
     other_column = find_first_non_id_column(&schema_result.schema);
     if (other_column == NULL) {
-        fprintf(stderr, "error: benchmark table must have at least one non-id column\n");
+        fprintf(stderr, "error: benchmark table must have at least one user column\n");
         free_schema(&schema_result.schema);
         return 1;
     }
