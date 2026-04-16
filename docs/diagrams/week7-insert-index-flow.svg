@@ -28,8 +28,8 @@
 
   <rect x="480" y="120" width="210" height="90" class="box accent2"/>
   <text x="523" y="155" class="label">3. executor</text>
-  <text x="506" y="180" class="small">현재 최대 id 확인</text>
-  <text x="518" y="200" class="small">새 id = max + 1</text>
+  <text x="491" y="180" class="small">다음 __internal_id 계산</text>
+  <text x="492" y="200" class="small">필요하면 인덱스 재구성 후 사용</text>
 
   <rect x="730" y="120" width="200" height="90" class="box accent3"/>
   <text x="790" y="160" class="label">4. storage</text>
@@ -37,7 +37,7 @@
 
   <rect x="970" y="120" width="170" height="90" class="box accent2"/>
   <text x="1010" y="160" class="label">5. index</text>
-  <text x="992" y="185" class="small">id -> offset 등록</text>
+  <text x="977" y="185" class="small">__internal_id -> offset 등록</text>
 
   <path d="M220 165 L260 165" class="arrow"/>
   <path d="M440 165 L480 165" class="arrow"/>
